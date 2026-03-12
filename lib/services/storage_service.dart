@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/import_record.dart';
 
@@ -10,32 +11,63 @@ class StorageService {
     final records = await getImportRecords();
     records.insert(0, record);
 
-    final recordsJson =
-        records.map((r) => r.toJson()).toList();
-    await prefs.setString(_recordsKey, jsonEncode(recordsJson));
+    final recordsJson = records.map((r) => r.toMap()).toList();
+    final encoded = jsonEncode(recordsJson);
+    await prefs.setString(_recordsKey, encoded);
+
+    debugPrint('===== 保存导入记录 =====');
+    debugPrint('记录ID: ${record.id}');
+    debugPrint('文件名: ${record.fileName}');
+    debugPrint('行数: ${record.rowCount}');
+    debugPrint('总记录数: ${records.length}');
+    debugPrint('保存的数据长度: ${encoded.length} 字符');
+    debugPrint('======================');
   }
 
   Future<List<ImportRecord>> getImportRecords() async {
     final prefs = await SharedPreferences.getInstance();
     final recordsJson = prefs.getString(_recordsKey);
 
-    if (recordsJson == null || recordsJson.isEmpty) return [];
+    debugPrint('===== 读取导入记录 =====');
+    debugPrint('存储Key: $_recordsKey');
+    debugPrint('原始数据是否为空: ${recordsJson == null || recordsJson.isEmpty}');
+    if (recordsJson != null) {
+      debugPrint('原始数据长度: ${recordsJson.length} 字符');
+    }
+
+    if (recordsJson == null || recordsJson.isEmpty) {
+      debugPrint('返回空列表');
+      debugPrint('======================');
+      return [];
+    }
 
     try {
       final List<dynamic> decoded = jsonDecode(recordsJson);
-      return decoded
+      debugPrint('解码后的记录数: ${decoded.length}');
+
+      final records = decoded
           .where((r) => r != null)
           .map((r) {
             try {
               return ImportRecord.fromMap(r as Map<String, dynamic>);
             } catch (e) {
+              debugPrint('解析单条记录错误: $e');
               return null;
             }
           })
           .whereType<ImportRecord>()
           .toList();
-    } catch (e) {
-      // Error loading records
+
+      debugPrint('成功解析的记录数: ${records.length}');
+      for (var i = 0; i < records.length && i < 3; i++) {
+        debugPrint('记录[$i]: ${records[i].fileName}, ${records[i].rowCount}行');
+      }
+      debugPrint('======================');
+      return records;
+    } catch (e, stackTrace) {
+      debugPrint('解析JSON错误: $e');
+      debugPrint('堆栈: $stackTrace');
+      debugPrint('======================');
       return [];
     }
   }
@@ -45,8 +77,7 @@ class StorageService {
     final records = await getImportRecords();
     records.removeWhere((r) => r.id == id);
 
-    final recordsJson =
-        records.map((r) => r.toJson()).toList();
+    final recordsJson = records.map((r) => r.toMap()).toList();
     await prefs.setString(_recordsKey, jsonEncode(recordsJson));
   }
 

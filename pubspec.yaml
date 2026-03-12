@@ -30,15 +30,23 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  # Excel相关
-  excel: ^4.0.6
+  # Excel相关 - 使用syncfusion_flutter_xlsio（用于导出）
+  syncfusion_flutter_xlsio: ^28.1.36
 
-  # CSV支持（备用方案）
+  # XML解析（用于读取xlsx）
+  xml: ^6.5.0
+
+  # ZIP解压（xlsx本质是zip文件）
+  archive: ^3.6.1
+
+  # CSV支持
   csv: ^6.0.0
 
   # 文件选择
@@ -52,7 +60,10 @@ dependencies:
   shared_preferences: ^2.3.3
 
   # 日期格式化
-  intl: ^0.19.0
+  intl: ^0.20.2
+
+  # 状态管理
+  provider: ^6.1.1
 
 dev_dependencies:
   flutter_test:

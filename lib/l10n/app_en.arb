@@ -1,0 +1,314 @@
+{
+  "@@locale": "en",
+  "@@last_modified": "2024-01-01T00:00:00.000Z",
+
+  "appTitle": "Excel Importer",
+  "@appTitle": {
+    "description": "Application title"
+  },
+
+  "history": "History",
+  "@history": {
+    "description": "History button text"
+  },
+
+  "version": "v1.0.0",
+  "@version": {
+    "description": "Version number"
+  },
+
+  "stable": "Stable",
+  "@stable": {
+    "description": "Stable release badge"
+  },
+
+  "heroTitle": "Excel Data Importer",
+  "@heroTitle": {
+    "description": "Hero section title"
+  },
+
+  "heroDescription": "Import Excel files and convert them to JSON format. Supports .xlsx and .csv files.",
+  "@heroDescription": {
+    "description": "Hero section description"
+  },
+
+  "supportedFormats": "xlsx, csv",
+  "@supportedFormats": {
+    "description": "Supported file formats"
+  },
+
+  "jsonOutput": "JSON output",
+  "@jsonOutput": {
+    "description": "JSON output feature"
+  },
+
+  "export": "Export",
+  "@export": {
+    "description": "Export feature"
+  },
+
+  "importFile": "Import File",
+  "@importFile": {
+    "description": "Import file card header"
+  },
+
+  "dragDropHint": "Drag and drop your Excel file here",
+  "@dragDropHint": {
+    "description": "Drag and drop hint text"
+  },
+
+  "orClickToBrowse": "or click to browse",
+  "@orClickToBrowse": {
+    "description": "Alternative action hint"
+  },
+
+  "chooseFile": "Choose file",
+  "@chooseFile": {
+    "description": "Choose file button text"
+  },
+
+  "importSuccessful": "Import Successful",
+  "@importSuccessful": {
+    "description": "Success message header"
+  },
+
+  "copy": "Copy",
+  "@copy": {
+    "description": "Copy button text"
+  },
+
+  "rows": "rows",
+  "@rows": {
+    "description": "Rows count label"
+  },
+
+  "sheets": "sheets",
+  "@sheets": {
+    "description": "Sheets count label"
+  },
+
+  "jsonOutputLabel": "JSON Output",
+  "@jsonOutputLabel": {
+    "description": "JSON output section label"
+  },
+
+  "json": "json",
+  "@json": {
+    "description": "JSON file extension label"
+  },
+
+  "noValidDataFound": "No valid data found",
+  "@noValidDataFound": {
+    "description": "Empty result message"
+  },
+
+  "fileContainsNoData": "File {fileName} contains {rowCount} rows but no valid data.",
+  "@fileContainsNoData": {
+    "description": "File info with no data",
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      },
+      "rowCount": {
+        "type": "int"
+      }
+    }
+  },
+
+  "processing": "Processing...",
+  "@processing": {
+    "description": "Loading message"
+  },
+
+  "successfullyImported": "Successfully imported {fileName}",
+  "@successfullyImported": {
+    "description": "Success toast message",
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "importFailed": "Import failed",
+  "@importFailed": {
+    "description": "Import failed message"
+  },
+
+  "unsupportedFormat": "File format not supported. Please save as standard xlsx format.",
+  "@unsupportedFormat": {
+    "description": "Unsupported format error"
+  },
+
+  "unsupportedExcelFormat": "Unsupported Excel format. Please convert and try again.",
+  "@unsupportedExcelFormat": {
+    "description": "Unsupported Excel format error"
+  },
+
+  "jsonCopied": "JSON copied to clipboard",
+  "@jsonCopied": {
+    "description": "Copy success message"
+  },
+
+  "exportedTo": "Exported to: {path}",
+  "@exportedTo": {
+    "description": "Export success message",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+
+  "importHistory": "Import History",
+  "@importHistory": {
+    "description": "History screen title"
+  },
+
+  "clear": "Clear",
+  "@clear": {
+    "description": "Clear button text"
+  },
+
+  "noImportHistory": "No import history",
+  "@noImportHistory": {
+    "description": "Empty history message"
+  },
+
+  "importedFilesWillAppear": "Imported Excel files will appear here",
+  "@importedFilesWillAppear": {
+    "description": "Empty history hint"
+  },
+
+  "record": "record",
+  "@record": {
+    "description": "Singular record label"
+  },
+
+  "records": "records",
+  "@records": {
+    "description": "Plural records label"
+  },
+
+  "total": "Total: {count} rows",
+  "@total": {
+    "description": "Total rows count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "deleteRecord": "Delete record?",
+  "@deleteRecord": {
+    "description": "Delete confirmation title"
+  },
+
+  "deleteRecordConfirm": "Delete \"{fileName}\" from history?",
+  "@deleteRecordConfirm": {
+    "description": "Delete confirmation message",
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Cancel button"
+  },
+
+  "delete": "Delete",
+  "@delete": "Delete button"
+  },
+
+  "recordDeleted": "Record deleted",
+  "@recordDeleted": {
+    "description": "Record deleted message"
+  },
+
+  "noRecordsToExport": "No records to export",
+  "@noRecordsToExport": {
+    "description": "No records error"
+  },
+
+  "clearAllRecords": "Clear all records?",
+  "@clearAllRecords": {
+    "description": "Clear all confirmation title"
+  },
+
+  "clearAllConfirm": "This action cannot be undone. All import records will be permanently deleted.",
+  "@clearAllConfirm": {
+    "description": "Clear all confirmation message"
+  },
+
+  "clearAll": "Clear all",
+  "@clearAll": {
+    "description": "Clear all button"
+  },
+
+  "allRecordsCleared": "All records cleared",
+  "@allRecordsCleared": {
+    "description": "All records cleared message"
+  },
+
+  "sheetNames": "Sheet names",
+  "@sheetNames": {
+    "description": "Sheet names label"
+  },
+
+  "totalRows": "Total rows",
+  "@totalRows": {
+    "description": "Total rows label"
+  },
+
+  "sheetsCount": "Sheets",
+  "@sheetsCount": {
+    "description": "Sheets count label"
+  },
+
+  "importedOn": "Imported on {date} at {time}",
+  "@importedOn": {
+    "description": "Import date time",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "jsonPreview": "JSON Preview",
+  "@jsonPreview": {
+    "description": "JSON preview label"
+  },
+
+  "selectSheet": "SELECT SHEET:",
+  "@selectSheet": {
+    "description": "Select sheet dropdown label"
+  },
+
+  "language": "Language",
+  "@language": {
+    "description": "Language setting label"
+  },
+
+  "english": "English",
+  "@english": {
+    "description": "English language name"
+  },
+
+  "chinese": "中文",
+  "@chinese": {
+    "description": "Chinese language name"
+  },
+
+  "settings": "Settings",
+  "@settings": {
+    "description": "Settings menu"
+  }
+}

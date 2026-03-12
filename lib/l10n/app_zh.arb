@@ -1,0 +1,315 @@
+{
+  "@@locale": "zh",
+  "@@last_modified": "2024-01-01T00:00:00.000Z",
+
+  "appTitle": "Excel导入工具",
+  "@appTitle": {
+    "description": "应用标题"
+  },
+
+  "history": "历史记录",
+  "@history": {
+    "description": "历史记录按钮文字"
+  },
+
+  "version": "v1.0.0",
+  "@version": {
+    "description": "版本号"
+  },
+
+  "stable": "稳定版",
+  "@stable": {
+    "description": "稳定版标签"
+  },
+
+  "heroTitle": "Excel数据导入器",
+  "@heroTitle": {
+    "description": "主标题"
+  },
+
+  "heroDescription": "导入Excel文件并转换为JSON格式。支持 .xlsx 和 .csv 文件。",
+  "@heroDescription": {
+    "description": "主描述"
+  },
+
+  "supportedFormats": "xlsx, csv",
+  "@supportedFormats": {
+    "description": "支持的格式"
+  },
+
+  "jsonOutput": "JSON输出",
+  "@jsonOutput": {
+    "description": "JSON输出功能"
+  },
+
+  "export": "导出",
+  "@export": {
+    "description": "导出功能"
+  },
+
+  "importFile": "导入文件",
+  "@importFile": {
+    "description": "导入文件卡片标题"
+  },
+
+  "dragDropHint": "将Excel文件拖放到此处",
+  "@dragDropHint": {
+    "description": "拖放提示文字"
+  },
+
+  "orClickToBrowse": "或点击选择文件",
+  "@orClickToBrowse": {
+    "description": "备选操作提示"
+  },
+
+  "chooseFile": "选择文件",
+  "@chooseFile": {
+    "description": "选择文件按钮文字"
+  },
+
+  "importSuccessful": "导入成功",
+  "@importSuccessful": {
+    "description": "成功消息标题"
+  },
+
+  "copy": "复制",
+  "@copy": {
+    "description": "复制按钮文字"
+  },
+
+  "rows": "行",
+  "@rows": {
+    "description": "行数标签"
+  },
+
+  "sheets": "个工作表",
+  "@sheets": {
+    "description": "工作表数标签"
+  },
+
+  "jsonOutputLabel": "JSON输出",
+  "@jsonOutputLabel": {
+    "description": "JSON输出区域标签"
+  },
+
+  "json": "json",
+  "@json": {
+    "description": "JSON文件扩展名标签"
+  },
+
+  "noValidDataFound": "未找到有效数据",
+  "@noValidDataFound": {
+    "description": "空结果消息"
+  },
+
+  "fileContainsNoData": "文件 {fileName} 包含 {rowCount} 行但没有有效数据。",
+  "@fileContainsNoData": {
+    "description": "文件无数据信息",
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      },
+      "rowCount": {
+        "type": "int"
+      }
+    }
+  },
+
+  "processing": "处理中...",
+  "@processing": {
+    "description": "加载消息"
+  },
+
+  "successfullyImported": "成功导入 {fileName}",
+  "@successfullyImported": {
+    "description": "成功提示消息",
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "importFailed": "导入失败",
+  "@importFailed": {
+    "description": "导入失败消息"
+  },
+
+  "unsupportedFormat": "不支持该文件格式，请另存为标准xlsx格式。",
+  "@unsupportedFormat": {
+    "description": "不支持格式错误"
+  },
+
+  "unsupportedExcelFormat": "不支持的Excel格式，请转换后重试。",
+  "@unsupportedExcelFormat": {
+    "description": "不支持Excel格式错误"
+  },
+
+  "jsonCopied": "JSON已复制到剪贴板",
+  "@jsonCopied": {
+    "description": "复制成功消息"
+  },
+
+  "exportedTo": "已导出到: {path}",
+  "@exportedTo": {
+    "description": "导出成功消息",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+
+  "importHistory": "导入历史",
+  "@importHistory": {
+    "description": "历史记录页面标题"
+  },
+
+  "clear": "清空",
+  "@clear": {
+    "description": "清空按钮文字"
+  },
+
+  "noImportHistory": "暂无导入记录",
+  "@noImportHistory": {
+    "description": "空历史消息"
+  },
+
+  "importedFilesWillAppear": "导入的Excel文件将在此显示",
+  "@importedFilesWillAppear": {
+    "description": "空历史提示"
+  },
+
+  "record": "条记录",
+  "@record": {
+    "description": "单数记录标签"
+  },
+
+  "records": "条记录",
+  "@records": {
+    "description": "复数记录标签"
+  },
+
+  "total": "总计: {count} 行",
+  "@total": {
+    "description": "总行数",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "deleteRecord": "删除记录？",
+  "@deleteRecord": {
+    "description": "删除确认标题"
+  },
+
+  "deleteRecordConfirm": "从历史记录中删除 \"{fileName}\"？",
+  "@deleteRecordConfirm": {
+    "description": "删除确认消息",
+    "placeholders": {
+      "fileName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "cancel": "取消",
+  "@cancel": {
+    "description": "取消按钮"
+  },
+
+  "delete": "删除",
+  "@delete": {
+    "description": "删除按钮"
+  },
+
+  "recordDeleted": "记录已删除",
+  "@recordDeleted": {
+    "description": "记录已删除消息"
+  },
+
+  "noRecordsToExport": "没有记录可导出",
+  "@noRecordsToExport": {
+    "description": "无记录错误"
+  },
+
+  "clearAllRecords": "清空所有记录？",
+  "@clearAllRecords": {
+    "description": "清空确认标题"
+  },
+
+  "clearAllConfirm": "此操作不可撤销，所有导入记录将被永久删除。",
+  "@clearAllConfirm": {
+    "description": "清空确认消息"
+  },
+
+  "clearAll": "清空全部",
+  "@clearAll": {
+    "description": "清空全部按钮"
+  },
+
+  "allRecordsCleared": "所有记录已清空",
+  "@allRecordsCleared": {
+    "description": "所有记录已清空消息"
+  },
+
+  "sheetNames": "工作表名称",
+  "@sheetNames": {
+    "description": "工作表名称标签"
+  },
+
+  "totalRows": "总行数",
+  "@totalRows": {
+    "description": "总行数标签"
+  },
+
+  "sheetsCount": "工作表数",
+  "@sheetsCount": {
+    "description": "工作表数标签"
+  },
+
+  "importedOn": "导入于 {date} {time}",
+  "@importedOn": {
+    "description": "导入日期时间",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "jsonPreview": "JSON预览",
+  "@jsonPreview": {
+    "description": "JSON预览标签"
+  },
+
+  "selectSheet": "选择工作表：",
+  "@selectSheet": {
+    "description": "选择工作表下拉标签"
+  },
+
+  "language": "语言",
+  "@language": {
+    "description": "语言设置标签"
+  },
+
+  "english": "English",
+  "@english": {
+    "description": "英文名称"
+  },
+
+  "chinese": "中文",
+  "@chinese": {
+    "description": "中文名称"
+  },
+
+  "settings": "设置",
+  "@settings": {
+    "description": "设置菜单"
+  }
+}

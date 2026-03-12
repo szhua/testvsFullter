@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../models/import_record.dart';
 import '../services/excel_service.dart';
 import 'records_screen.dart';
+import '../main.dart';
+import '../providers/locale_provider.dart';
 
 class ImportScreen extends StatefulWidget {
   const ImportScreen({super.key});
@@ -23,8 +26,6 @@ class _ImportScreenState extends State<ImportScreen> {
     setState(() => _isLoading = true);
     try {
       final record = await _excelService.importExcel();
-      debugPrint('导入记录: ${record?.fileName}, 行数: ${record?.rowCount}, Sheet数: ${record?.sheetCount}');
-      debugPrint('JSON预览长度: ${record?.jsonPreview?.length ?? 0}');
 
       if (record != null) {
         Map<String, dynamic>? parsedData;
@@ -43,39 +44,56 @@ class _ImportScreenState extends State<ImportScreen> {
           _parsedData = parsedData ?? {};
           _selectedSheet = _parsedData?.keys.firstOrNull;
         });
-        debugPrint('解析后的数据: $_parsedData');
-        debugPrint('选中的sheet: $_selectedSheet');
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('成功导入: ${record.fileName}'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          final l10n = AppLocalizations.of(context)!;
+          _showToast('${l10n.successfullyImported} ${record.fileName}', isError: false);
         }
       }
     } catch (e) {
-      debugPrint('导入错误: $e');
+      final l10n = AppLocalizations.of(context)!;
       final errorStr = e.toString();
+      String userMessage = l10n.importFailed;
 
-      // 解析错误类型并给出友好提示
-      String userMessage = '导入失败: $e';
       if (errorStr.contains('numFmtId') || errorStr.contains('custom number format')) {
-        userMessage = 'Excel文件包含自定义数字格式，不被支持。\n解决方法：请用Excel打开文件，另存为"Excel工作簿(*.xlsx)"格式后重试。';
+        userMessage = l10n.unsupportedFormat;
+      } else if (errorStr.contains('Invalid') || errorStr.contains('format') || errorStr.contains('OLE2')) {
+        userMessage = l10n.unsupportedExcelFormat;
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(userMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
+        _showToast(userMessage, isError: true);
       }
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  void _showToast(String message, {required bool isError}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: isError ? const Color(0xFFCF222E) : const Color(0xFF1F883D),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.cancel_outlined : Icons.check_circle_outline,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 14, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _copyJsonToClipboard() {
@@ -84,9 +102,8 @@ class _ImportScreenState extends State<ImportScreen> {
     final jsonString = const JsonEncoder.withIndent('  ').convert(_parsedData);
     Clipboard.setData(ClipboardData(text: jsonString));
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('JSON已复制到剪贴板')),
-    );
+    final l10n = AppLocalizations.of(context)!;
+    _showToast(l10n.jsonCopied, isError: false);
   }
 
   Future<void> _exportCurrentData() async {
@@ -99,204 +116,587 @@ class _ImportScreenState extends State<ImportScreen> {
         customFileName: 'exported_${_lastRecord?.fileName ?? 'data'}.xlsx',
       );
       if (path != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已导出到: $path')),
-        );
+        final l10n = AppLocalizations.of(context)!;
+        _showToast('${l10n.exportedTo}: $path', isError: false);
       }
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
+  void _showLanguageDialog() {
+    final l10n = AppLocalizations.of(context)!;
+    final localeProvider = context.read<LocaleProvider>();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.language, color: Color(0xFF1F883D)),
+            const SizedBox(width: 8),
+            Text(l10n.language),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildLanguageOption(
+              context,
+              locale: const Locale('en'),
+              label: l10n.english,
+              isSelected: localeProvider.isEnglish,
+            ),
+            const SizedBox(height: 8),
+            _buildLanguageOption(
+              context,
+              locale: const Locale('zh'),
+              label: l10n.chinese,
+              isSelected: localeProvider.isChinese,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(
+    BuildContext context, {
+    required Locale locale,
+    required String label,
+    required bool isSelected,
+  }) {
+    return InkWell(
+      onTap: () {
+        context.read<LocaleProvider>().setLocale(locale);
+        Navigator.pop(context);
+      },
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF1F883D).withValues(alpha: 0.1) : null,
+          border: Border.all(
+            color: isSelected ? const Color(0xFF1F883D) : const Color(0xFFD0D7DE),
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: isSelected ? const Color(0xFF1F883D) : const Color(0xFF57606A),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? const Color(0xFF24292F) : const Color(0xFF57606A),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Excel导入工具'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Icon(Icons.table_chart, size: 20, color: Color(0xFF24292F)),
+            ),
+            const SizedBox(width: 10),
+            Text(l10n.appTitle),
+          ],
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: '查看记录',
+          TextButton.icon(
+            onPressed: _showLanguageDialog,
+            icon: const Icon(Icons.language, size: 18),
+            label: Text(l10n.language),
+          ),
+          TextButton.icon(
             onPressed: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const RecordsScreen()),
               );
             },
+            icon: const Icon(Icons.history, size: 18),
+            label: Text(l10n.history),
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? _GitHubLoading(processingText: l10n.processing)
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            '导入Excel文件',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            '支持 .xlsx 和 .xls 格式',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: _pickAndImportExcel,
-                            icon: const Icon(Icons.upload_file),
-                            label: const Text('选择Excel文件'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_parsedData != null && _parsedData!.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    _buildResultCard(),
-                  ] else if (_lastRecord != null) ...[
-                    const SizedBox(height: 16),
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '导入结果',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('文件: ${_lastRecord!.fileName}'),
-                                  Text('总行数: ${_lastRecord!.rowCount}'),
-                                  Text('工作表数: ${_lastRecord!.sheetCount}'),
-                                  const SizedBox(height: 8),
-                                  const Text('⚠️ Excel文件没有有效数据或工作表为空',
-                                      style: TextStyle(color: Colors.orange)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                  // Hero Section
+                  _buildHeroSection(l10n),
+                  const SizedBox(height: 24),
+
+                  // Import Card
+                  _buildImportCard(l10n),
+                  const SizedBox(height: 24),
+
+                  // Results
+                  if (_parsedData != null && _parsedData!.isNotEmpty)
+                    _buildResultCard(l10n)
+                  else if (_lastRecord != null)
+                    _buildEmptyResultCard(l10n),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildResultCard() {
+  Widget _buildHeroSection(AppLocalizations l10n) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF24292F), Color(0xFF32383F)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF32383F)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1F883D),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  l10n.version,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFF57606A)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  l10n.stable,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            l10n.heroTitle,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.heroDescription,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF8B949E), height: 1.5),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              _buildStatChip(Icons.insert_drive_file_outlined, l10n.supportedFormats),
+              const SizedBox(width: 12),
+              _buildStatChip(Icons.code_outlined, l10n.jsonOutput),
+              const SizedBox(width: 12),
+              _buildStatChip(Icons.cloud_upload_outlined, l10n.export),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF8B949E)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImportCard(AppLocalizations l10n) {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFD0D7DE))),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F883D).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(Icons.file_upload_outlined, size: 16, color: Color(0xFF1F883D)),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  l10n.importFile,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF24292F),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Content
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                // Drop zone
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF6F8FA),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFD0D7DE), style: BorderStyle.solid),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1F883D).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.cloud_upload_outlined, size: 24, color: Color(0xFF1F883D)),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        l10n.dragDropHint,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF24292F),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.orClickToBrowse,
+                        style: const TextStyle(fontSize: 14, color: Color(0xFF57606A)),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: _pickAndImportExcel,
+                        icon: const Icon(Icons.folder_open, size: 18),
+                        label: Text(l10n.chooseFile),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6F8FA),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        '.xlsx',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF57606A)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6F8FA),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        '.csv',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF57606A)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultCard(AppLocalizations l10n) {
     final sheets = _parsedData?.keys.toList() ?? [];
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFD0D7DE))),
+            ),
+            child: Row(
               children: [
-                const Text(
-                  '导入结果',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F883D).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF1F883D)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    l10n.importSuccessful,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF24292F),
+                    ),
                   ),
                 ),
                 Row(
                   children: [
                     TextButton.icon(
                       onPressed: _copyJsonToClipboard,
-                      icon: const Icon(Icons.copy),
-                      label: const Text('复制JSON'),
+                      icon: const Icon(Icons.copy_outlined, size: 16),
+                      label: Text(l10n.copy),
                     ),
+                    const SizedBox(width: 8),
                     TextButton.icon(
                       onPressed: _exportCurrentData,
-                      icon: const Icon(Icons.download),
-                      label: const Text('导出Excel'),
+                      icon: const Icon(Icons.download_outlined, size: 16),
+                      label: Text(l10n.export),
                     ),
                   ],
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            if (_lastRecord != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('文件: ${_lastRecord!.fileName}'),
-                    Text('总行数: ${_lastRecord!.rowCount}'),
-                    Text('工作表数: ${_lastRecord!.sheetCount}'),
-                  ],
-                ),
+          ),
+
+          // File info
+          if (_lastRecord != null)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF6F8FA),
+                border: Border(bottom: BorderSide(color: Color(0xFFD0D7DE))),
               ),
-            const SizedBox(height: 16),
-            if (sheets.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('Excel文件为空或没有有效数据', style: TextStyle(color: Colors.grey)),
-              )
-            else ...[
-              if (sheets.length > 1)
-                DropdownButton<String>(
-                  value: _selectedSheet,
-                  isExpanded: true,
-                  items: sheets.map((sheet) {
-                    return DropdownMenuItem(
-                      value: sheet,
-                      child: Text(sheet),
+              child: Row(
+                children: [
+                  GitHubFileIcon(fileName: _lastRecord!.fileName),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _lastRecord!.fileName,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF24292F),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_lastRecord!.rowCount} ${l10n.rows} • ${_lastRecord!.sheetCount} ${l10n.sheets}',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF57606A)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Sheet tabs
+          if (sheets.length > 1)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0xFFD0D7DE))),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: sheets.map((sheet) {
+                    final isSelected = sheet == _selectedSheet;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedSheet = sheet),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFFF6F8FA) : Colors.transparent,
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFFD0D7DE) : Colors.transparent,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          sheet,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            color: isSelected ? const Color(0xFF24292F) : const Color(0xFF57606A),
+                          ),
+                        ),
+                      ),
                     );
                   }).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedSheet = value);
-                  },
                 ),
-              const SizedBox(height: 16),
-              const Text(
-                'JSON预览:',
-                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
-              _buildJsonPreview(),
-            ],
+            ),
+
+          // JSON Preview
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.code_outlined, size: 16, color: Color(0xFF57606A)),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n.jsonOutputLabel,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF57606A),
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD0D7DE),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        l10n.json,
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: Color(0xFF57606A)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildJsonPreview(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyResultCard(AppLocalizations l10n) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8C5),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(Icons.warning_amber_outlined, color: Color(0xFF9A6700)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.noValidDataFound,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF24292F),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.fileContainsNoData(
+                      _lastRecord!.fileName,
+                      _lastRecord!.rowCount,
+                    ),
+                    style: const TextStyle(fontSize: 13, color: Color(0xFF57606A)),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -305,17 +705,21 @@ class _ImportScreenState extends State<ImportScreen> {
 
   Widget _buildJsonPreview() {
     if (_selectedSheet == null || _parsedData == null) {
-      return const Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Text('请选择一个工作表'),
-      );
+      return const SizedBox();
     }
 
     final sheetData = _parsedData![_selectedSheet];
     if (sheetData == null) {
-      return const Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Text('工作表数据为空'),
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF6F8FA),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Text(
+          'No data available',
+          style: TextStyle(color: Color(0xFF57606A)),
+        ),
       );
     }
 
@@ -324,18 +728,108 @@ class _ImportScreenState extends State<ImportScreen> {
     return Container(
       constraints: const BoxConstraints(maxHeight: 400),
       decoration: BoxDecoration(
-        color: Colors.grey.shade900,
-        borderRadius: BorderRadius.circular(8),
+        color: const Color(0xFF0D1117),
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: SelectableText(
-          jsonString,
-          style: const TextStyle(
-            fontFamily: 'monospace',
-            color: Colors.lightGreenAccent,
-            fontSize: 12,
+      child: Column(
+        children: [
+          // Header bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFF30363D))),
+            ),
+            child: Row(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(color: Color(0xFFFF5F56), shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(color: Color(0xFFFFBD2E), shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(color: Color(0xFF27C93F), shape: BoxShape.circle),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    '$_selectedSheet.json',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF8B949E)),
+                  ),
+                ),
+              ],
+            ),
           ),
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: SelectableText(
+                jsonString,
+                style: const TextStyle(
+                  fontFamily: 'ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace',
+                  color: Color(0xFFC9D1D9),
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GitHubLoading extends StatelessWidget {
+  final String processingText;
+
+  const _GitHubLoading({required this.processingText});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFD0D7DE)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF1F883D)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              processingText,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF24292F),
+              ),
+            ),
+          ],
         ),
       ),
     );
