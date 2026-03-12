@@ -221,7 +221,8 @@
   },
 
   "delete": "Delete",
-  "@delete": "Delete button"
+  "@delete": {
+    "description": "Delete button"
   },
 
   "recordDeleted": "Record deleted",
