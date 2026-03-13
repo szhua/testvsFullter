@@ -13,24 +13,26 @@ class ImportRecord {
   final String fileName;
   final int rowCount;
   final int sheetCount;
-  final DateTime importTime;
+  final DateTime uploadTime;  // 上传时间（改为上传成功的时间）
   final String? jsonPreview;
   final List<String> sheetNames;
   final UploadStatus uploadStatus;
   final String? uploadError;
-  final DateTime? uploadTime;
+  final List<String> headers;  // 修改后的表头
+  final String? serverResponse;  // 服务器返回的数据
 
   ImportRecord({
     required this.id,
     required this.fileName,
     required this.rowCount,
     required this.sheetCount,
-    required this.importTime,
+    required this.uploadTime,
     this.jsonPreview,
     required this.sheetNames,
     this.uploadStatus = UploadStatus.pending,
     this.uploadError,
-    this.uploadTime,
+    this.headers = const [],
+    this.serverResponse,
   });
 
   Map<String, dynamic> toMap() {
@@ -39,12 +41,13 @@ class ImportRecord {
       'fileName': fileName,
       'rowCount': rowCount,
       'sheetCount': sheetCount,
-      'importTime': importTime.toIso8601String(),
+      'uploadTime': uploadTime.toIso8601String(),
       'jsonPreview': jsonPreview,
       'sheetNames': sheetNames,
       'uploadStatus': uploadStatus.name,
       'uploadError': uploadError,
-      'uploadTime': uploadTime?.toIso8601String(),
+      'headers': headers,
+      'serverResponse': serverResponse,
     };
   }
 
@@ -54,9 +57,11 @@ class ImportRecord {
       fileName: map['fileName']?.toString() ?? '',
       rowCount: map['rowCount'] as int? ?? 0,
       sheetCount: map['sheetCount'] as int? ?? 0,
-      importTime: map['importTime'] != null
-          ? DateTime.tryParse(map['importTime'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      uploadTime: map['uploadTime'] != null
+          ? DateTime.tryParse(map['uploadTime'].toString()) ?? DateTime.now()
+          : map['importTime'] != null  // 兼容旧数据
+              ? DateTime.tryParse(map['importTime'].toString()) ?? DateTime.now()
+              : DateTime.now(),
       jsonPreview: map['jsonPreview']?.toString(),
       sheetNames: map['sheetNames'] != null
           ? List<String>.from(map['sheetNames'] as List)
@@ -68,9 +73,10 @@ class ImportRecord {
             )
           : UploadStatus.pending,
       uploadError: map['uploadError']?.toString(),
-      uploadTime: map['uploadTime'] != null
-          ? DateTime.tryParse(map['uploadTime'].toString())
-          : null,
+      headers: map['headers'] != null
+          ? List<String>.from(map['headers'] as List)
+          : [],
+      serverResponse: map['serverResponse']?.toString(),
     );
   }
 
@@ -79,18 +85,22 @@ class ImportRecord {
     UploadStatus? uploadStatus,
     String? uploadError,
     DateTime? uploadTime,
+    List<String>? headers,
+    String? serverResponse,
+    String? jsonPreview,
   }) {
     return ImportRecord(
       id: id,
       fileName: fileName,
       rowCount: rowCount,
       sheetCount: sheetCount,
-      importTime: importTime,
-      jsonPreview: jsonPreview,
+      uploadTime: uploadTime ?? this.uploadTime,
+      jsonPreview: jsonPreview ?? this.jsonPreview,
       sheetNames: sheetNames,
       uploadStatus: uploadStatus ?? this.uploadStatus,
       uploadError: uploadError ?? this.uploadError,
-      uploadTime: uploadTime ?? this.uploadTime,
+      headers: headers ?? this.headers,
+      serverResponse: serverResponse ?? this.serverResponse,
     );
   }
 

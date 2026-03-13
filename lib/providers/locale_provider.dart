@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 语言状态管理
 class LocaleProvider extends ChangeNotifier {
   static const String _localeKey = 'app_locale';
-  Locale _locale = const Locale('en');
+  Locale _locale = const Locale('zh');
 
   Locale get locale => _locale;
 

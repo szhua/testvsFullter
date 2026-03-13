@@ -196,6 +196,9 @@ class AppLocalizations {
       'uploadStatus': 'Upload Status',
       'pending': 'Pending',
       'uploaded': 'Uploaded',
+      'headersLabel': 'Headers',
+      'serverResponse': 'Server Response',
+      'reupload': 'Re-upload',
     },
     'zh': {
       'appTitle': 'Excel导入工具',
@@ -263,6 +266,9 @@ class AppLocalizations {
       'uploadStatus': '上传状态',
       'pending': '待上传',
       'uploaded': '已上传',
+      'headersLabel': '表头',
+      'serverResponse': '服务器响应',
+      'reupload': '重新上传',
     },
   };
 
@@ -330,6 +336,9 @@ class AppLocalizations {
   String get uploadStatus => _localizedValues[locale.languageCode]?['uploadStatus'] ?? 'Upload Status';
   String get pending => _localizedValues[locale.languageCode]?['pending'] ?? 'Pending';
   String get uploaded => _localizedValues[locale.languageCode]?['uploaded'] ?? 'Uploaded';
+  String get headersLabel => _localizedValues[locale.languageCode]?['headersLabel'] ?? 'Headers';
+  String get serverResponse => _localizedValues[locale.languageCode]?['serverResponse'] ?? 'Server Response';
+  String get reupload => _localizedValues[locale.languageCode]?['reupload'] ?? 'Re-upload';
 
   // 带参数的方法
   String importedOn(String date, String time) {
@@ -338,6 +347,14 @@ class AppLocalizations {
       return '导入于 $date $time';
     }
     return 'Imported on $date at $time';
+  }
+
+  String uploadedOn(String date, String time) {
+    final isZh = locale.languageCode == 'zh';
+    if (isZh) {
+      return '上传于 $date $time';
+    }
+    return 'Uploaded on $date at $time';
   }
 
   String fileContainsNoData(String fileName, int rowCount) {

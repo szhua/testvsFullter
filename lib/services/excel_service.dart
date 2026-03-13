@@ -319,7 +319,8 @@ class ExcelService {
     return index - 1; // A = 0
   }
 
-  Future<ImportRecord?> importExcel() async {
+  /// 解析Excel文件，返回数据但不保存记录
+  Future<Map<String, dynamic>?> parseExcel() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -339,27 +340,20 @@ class ExcelService {
             data = parseExcelBytes(file.bytes!, file.name);
           }
 
-          final record = ImportRecord(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            fileName: file.name,
-            rowCount: data['totalRows'] as int,
-            sheetCount: (data['sheetNames'] as List).length,
-            importTime: DateTime.now(),
-            jsonPreview: const JsonEncoder.withIndent(
-              '  ',
-            ).convert(data['sheets']),
-            sheetNames: List<String>.from(data['sheetNames']),
-          );
-
-          await _storageService.saveImportRecord(record);
-          return record;
+          return {
+            'fileName': file.name,
+            'rowCount': data['totalRows'] as int,
+            'sheetCount': (data['sheetNames'] as List).length,
+            'sheetNames': List<String>.from(data['sheetNames']),
+            'sheets': data['sheets'],
+          };
         } else {
           throw Exception('无法读取文件内容 - bytes 为空');
         }
       }
       return null;
     } catch (e, stackTrace) {
-      debugPrint('导入Excel错误: $e');
+      debugPrint('解析Excel错误: $e');
       debugPrint('堆栈跟踪: $stackTrace');
       rethrow;
     }
@@ -412,16 +406,82 @@ class ExcelService {
     }
   }
 
-  /// 上传记录数据到服务器并更新状态
-  Future<ImportRecord> uploadRecordToServer(ImportRecord record) async {
+  /// 上传数据到服务器并保存记录
+  Future<ImportRecord> uploadToServer({
+    required String fileName,
+    required int rowCount,
+    required int sheetCount,
+    required List<String> sheetNames,
+    required List<String> headers,
+    required Map<String, dynamic> sheetsData,
+  }) async {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final jsonPreview = const JsonEncoder.withIndent('  ').convert(sheetsData);
+
+    // 创建初始记录
+    var record = ImportRecord(
+      id: id,
+      fileName: fileName,
+      rowCount: rowCount,
+      sheetCount: sheetCount,
+      uploadTime: DateTime.now(),
+      jsonPreview: jsonPreview,
+      sheetNames: sheetNames,
+      uploadStatus: UploadStatus.uploading,
+      headers: headers,
+    );
+
+    try {
+      // 发送数据
+      final response = await _dio.post(
+        '$_baseUrl/serviceRequest/setKeyValue',
+        data: {
+          'key': fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_'),
+          'value': jsonEncode(sheetsData),
+        },
+        options: Options(contentType: 'application/x-www-form-urlencoded'),
+      );
+
+      if (response.statusCode == 200) {
+        // 上传成功，保存记录
+        record = record.copyWith(
+          uploadStatus: UploadStatus.success,
+          uploadTime: DateTime.now(),
+          serverResponse: response.data?.toString(),
+        );
+      } else {
+        record = record.copyWith(
+          uploadStatus: UploadStatus.failed,
+          uploadError: 'Server returned status ${response.statusCode}',
+        );
+      }
+    } on DioException catch (e) {
+      record = record.copyWith(
+        uploadStatus: UploadStatus.failed,
+        uploadError: e.message ?? 'Network error',
+      );
+    } catch (e) {
+      record = record.copyWith(
+        uploadStatus: UploadStatus.failed,
+        uploadError: e.toString(),
+      );
+    }
+
+    // 保存记录（无论成功或失败）
+    await _storageService.saveImportRecord(record);
+    return record;
+  }
+
+  /// 重新上传记录
+  Future<ImportRecord> reuploadRecord(ImportRecord record, {Map<String, dynamic>? updatedData}) async {
     // 更新状态为上传中
     var updatedRecord = record.copyWith(uploadStatus: UploadStatus.uploading);
     await _storageService.updateRecord(updatedRecord);
 
     try {
-      // 解析JSON数据
-      Map<String, dynamic>? data;
-      if (record.jsonPreview != null && record.jsonPreview!.isNotEmpty) {
+      // 使用更新后的数据或原始数据
+      Map<String, dynamic>? data = updatedData;
+      if (data == null && record.jsonPreview != null && record.jsonPreview!.isNotEmpty) {
         data = jsonDecode(record.jsonPreview!) as Map<String, dynamic>;
       }
 
@@ -434,20 +494,33 @@ class ExcelService {
         return updatedRecord;
       }
 
-      // 发送数据
-      final success = await sendDataToServer(record, data);
+      final response = await _dio.post(
+        '$_baseUrl/serviceRequest/setKeyValue',
+        data: {
+          'key': record.fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_'),
+          'value': jsonEncode(data),
+        },
+        options: Options(contentType: 'application/x-www-form-urlencoded'),
+      );
 
-      if (success) {
+      if (response.statusCode == 200) {
         updatedRecord = updatedRecord.copyWith(
           uploadStatus: UploadStatus.success,
           uploadTime: DateTime.now(),
+          serverResponse: response.data?.toString(),
+          jsonPreview: updatedData != null ? const JsonEncoder.withIndent('  ').convert(updatedData) : null,
         );
       } else {
         updatedRecord = updatedRecord.copyWith(
           uploadStatus: UploadStatus.failed,
-          uploadError: 'Server returned error',
+          uploadError: 'Server returned status ${response.statusCode}',
         );
       }
+    } on DioException catch (e) {
+      updatedRecord = updatedRecord.copyWith(
+        uploadStatus: UploadStatus.failed,
+        uploadError: e.message ?? 'Network error',
+      );
     } catch (e) {
       updatedRecord = updatedRecord.copyWith(
         uploadStatus: UploadStatus.failed,
@@ -483,7 +556,7 @@ class ExcelService {
         sheet
             .getRangeByIndex(row, 5)
             .setText(
-              '${record.importTime.year}-${record.importTime.month.toString().padLeft(2, '0')}-${record.importTime.day.toString().padLeft(2, '0')} ${record.importTime.hour.toString().padLeft(2, '0')}:${record.importTime.minute.toString().padLeft(2, '0')}:${record.importTime.second.toString().padLeft(2, '0')}',
+              '${record.uploadTime.year}-${record.uploadTime.month.toString().padLeft(2, '0')}-${record.uploadTime.day.toString().padLeft(2, '0')} ${record.uploadTime.hour.toString().padLeft(2, '0')}:${record.uploadTime.minute.toString().padLeft(2, '0')}:${record.uploadTime.second.toString().padLeft(2, '0')}',
             );
         sheet.getRangeByIndex(row, 6).setText(record.sheetNames.join(', '));
       }

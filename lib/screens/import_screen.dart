@@ -20,46 +20,44 @@ class _ImportScreenState extends State<ImportScreen> {
   Map<String, dynamic>? _parsedData;
   String? _selectedSheet;
   bool _isLoading = false;
-  ImportRecord? _lastRecord;
+  String? _fileName;
+  int _rowCount = 0;
+  int _sheetCount = 0;
+  List<String> _sheetNames = [];
   List<String> _editableHeaders = []; // 可编辑的headers
   bool _isUploading = false; // 上传状态
+  ImportRecord? _uploadedRecord; // 上传成功后的记录
 
   Future<void> _pickAndImportExcel() async {
     setState(() => _isLoading = true);
     try {
-      final record = await _excelService.importExcel();
+      final data = await _excelService.parseExcel();
 
-      if (record != null) {
-        Map<String, dynamic>? parsedData;
-        try {
-          final jsonStr = record.jsonPreview ?? '{}';
-          final decoded = jsonDecode(jsonStr);
-          if (decoded is Map<String, dynamic>) {
-            parsedData = decoded;
-          }
-        } catch (e) {
-          debugPrint('JSON解析错误: $e');
-        }
-
+      if (data != null) {
         // 获取第一个sheet的headers用于编辑
         List<String> headers = [];
-        if (parsedData != null && parsedData.isNotEmpty) {
-          final firstSheet = parsedData.values.first;
+        final sheets = data['sheets'] as Map<String, dynamic>?;
+        if (sheets != null && sheets.isNotEmpty) {
+          final firstSheet = sheets.values.first;
           if (firstSheet is Map && firstSheet['headers'] is List) {
             headers = List<String>.from(firstSheet['headers']);
           }
         }
 
         setState(() {
-          _lastRecord = record;
-          _parsedData = parsedData ?? {};
+          _fileName = data['fileName'] as String;
+          _rowCount = data['rowCount'] as int;
+          _sheetCount = data['sheetCount'] as int;
+          _sheetNames = List<String>.from(data['sheetNames'] as List);
+          _parsedData = data['sheets'] as Map<String, dynamic>? ?? {};
           _selectedSheet = _parsedData?.keys.firstOrNull;
           _editableHeaders = headers;
+          _uploadedRecord = null; // 重置上传记录
         });
 
         if (mounted) {
           final l10n = AppLocalizations.of(context)!;
-          _showToast('${l10n.successfullyImported} ${record.fileName}', isError: false);
+          _showToast('${l10n.successfullyImported} $_fileName', isError: false);
         }
       }
     } catch (e) {
@@ -127,7 +125,7 @@ class _ImportScreenState extends State<ImportScreen> {
     try {
       final path = await _excelService.exportJsonToExcel(
         _parsedData!,
-        customFileName: 'exported_${_lastRecord?.fileName ?? 'data'}.xlsx',
+        customFileName: 'exported_${_fileName ?? 'data'}.xlsx',
       );
       if (path != null && mounted) {
         final l10n = AppLocalizations.of(context)!;
@@ -263,36 +261,29 @@ class _ImportScreenState extends State<ImportScreen> {
 
   /// 上传数据到服务器
   Future<void> _uploadToServer() async {
-    if (_lastRecord == null || _parsedData == null) return;
+    if (_parsedData == null || _fileName == null) return;
 
     setState(() => _isUploading = true);
     final l10n = AppLocalizations.of(context)!;
 
     try {
-      // 先更新记录的jsonPreview
-      final updatedJsonPreview = jsonEncode(_parsedData);
-      final updatedRecord = ImportRecord(
-        id: _lastRecord!.id,
-        fileName: _lastRecord!.fileName,
-        rowCount: _lastRecord!.rowCount,
-        sheetCount: _lastRecord!.sheetCount,
-        importTime: _lastRecord!.importTime,
-        jsonPreview: updatedJsonPreview,
-        sheetNames: _lastRecord!.sheetNames,
-        uploadStatus: UploadStatus.uploading,
+      final record = await _excelService.uploadToServer(
+        fileName: _fileName!,
+        rowCount: _rowCount,
+        sheetCount: _sheetCount,
+        sheetNames: _sheetNames,
+        headers: _editableHeaders,
+        sheetsData: _parsedData!,
       );
 
-      // 上传到服务器
-      final result = await _excelService.uploadRecordToServer(updatedRecord);
-
       setState(() {
-        _lastRecord = result;
+        _uploadedRecord = record;
       });
 
-      if (result.uploadStatus == UploadStatus.success) {
+      if (record.uploadStatus == UploadStatus.success) {
         if (mounted) _showToast(l10n.uploadSuccess, isError: false);
       } else {
-        if (mounted) _showToast('${l10n.uploadFailed}: ${result.uploadError}', isError: true);
+        if (mounted) _showToast('${l10n.uploadFailed}: ${record.uploadError}', isError: true);
       }
     } catch (e) {
       if (mounted) _showToast('${l10n.uploadFailed}: $e', isError: true);
@@ -441,7 +432,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   // Results
                   if (_parsedData != null && _parsedData!.isNotEmpty)
                     _buildResultCard(l10n)
-                  else if (_lastRecord != null)
+                  else if (_fileName != null)
                     _buildEmptyResultCard(l10n),
                 ],
               ),
@@ -725,7 +716,7 @@ class _ImportScreenState extends State<ImportScreen> {
           ),
 
           // File info
-          if (_lastRecord != null)
+          if (_fileName != null)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
@@ -736,14 +727,14 @@ class _ImportScreenState extends State<ImportScreen> {
                 children: [
                   Row(
                     children: [
-                      GitHubFileIcon(fileName: _lastRecord!.fileName),
+                      GitHubFileIcon(fileName: _fileName!),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              _lastRecord!.fileName,
+                              _fileName!,
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -752,7 +743,7 @@ class _ImportScreenState extends State<ImportScreen> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '${_lastRecord!.rowCount} ${l10n.rows} • ${_lastRecord!.sheetCount} ${l10n.sheets}',
+                              '$_rowCount ${l10n.rows} • $_sheetCount ${l10n.sheets}',
                               style: const TextStyle(fontSize: 12, color: Color(0xFF57606A)),
                             ),
                           ],
@@ -765,7 +756,31 @@ class _ImportScreenState extends State<ImportScreen> {
                   Row(
                     children: [
                       // Upload status badge
-                      _buildUploadStatusBadge(_lastRecord!, l10n),
+                      if (_uploadedRecord != null)
+                        _buildUploadStatusBadge(_uploadedRecord!, l10n)
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF6F8FA),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.schedule, size: 14, color: const Color(0xFF57606A)),
+                              const SizedBox(width: 6),
+                              Text(
+                                l10n.pending,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF57606A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       const Spacer(),
                       // Upload button
                       if (_isUploading)
@@ -779,13 +794,13 @@ class _ImportScreenState extends State<ImportScreen> {
                         )
                       else
                         ElevatedButton.icon(
-                          onPressed: _lastRecord!.uploadStatus == UploadStatus.uploading
+                          onPressed: _uploadedRecord?.uploadStatus == UploadStatus.success
                               ? null
                               : _uploadToServer,
                           icon: const Icon(Icons.cloud_upload_outlined, size: 18),
                           label: Text(l10n.uploadToServer),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _lastRecord!.uploadStatus == UploadStatus.success
+                            backgroundColor: _uploadedRecord?.uploadStatus == UploadStatus.success
                                 ? const Color(0xFF1F883D)
                                 : null,
                           ),
@@ -907,10 +922,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    l10n.fileContainsNoData(
-                      _lastRecord!.fileName,
-                      _lastRecord!.rowCount,
-                    ),
+                    l10n.fileContainsNoData(_fileName!, _rowCount),
                     style: const TextStyle(fontSize: 13, color: Color(0xFF57606A)),
                   ),
                 ],
