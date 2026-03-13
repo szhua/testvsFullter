@@ -185,6 +185,17 @@ class AppLocalizations {
       'english': 'English',
       'chinese': '中文',
       'settings': 'Settings',
+      'editHeaders': 'Edit Headers',
+      'column': 'Column',
+      'save': 'Save',
+      'headersUpdated': 'Headers updated',
+      'uploadToServer': 'Upload to Server',
+      'uploadSuccess': 'Upload successful',
+      'uploadFailed': 'Upload failed',
+      'uploading': 'Uploading...',
+      'uploadStatus': 'Upload Status',
+      'pending': 'Pending',
+      'uploaded': 'Uploaded',
     },
     'zh': {
       'appTitle': 'Excel导入工具',
@@ -241,6 +252,17 @@ class AppLocalizations {
       'english': 'English',
       'chinese': '中文',
       'settings': '设置',
+      'editHeaders': '编辑表头',
+      'column': '列',
+      'save': '保存',
+      'headersUpdated': '表头已更新',
+      'uploadToServer': '上传到服务器',
+      'uploadSuccess': '上传成功',
+      'uploadFailed': '上传失败',
+      'uploading': '上传中...',
+      'uploadStatus': '上传状态',
+      'pending': '待上传',
+      'uploaded': '已上传',
     },
   };
 
@@ -297,6 +319,17 @@ class AppLocalizations {
   String get english => _localizedValues[locale.languageCode]?['english'] ?? 'English';
   String get chinese => _localizedValues[locale.languageCode]?['chinese'] ?? '中文';
   String get settings => _localizedValues[locale.languageCode]?['settings'] ?? 'Settings';
+  String get editHeaders => _localizedValues[locale.languageCode]?['editHeaders'] ?? 'Edit Headers';
+  String get column => _localizedValues[locale.languageCode]?['column'] ?? 'Column';
+  String get save => _localizedValues[locale.languageCode]?['save'] ?? 'Save';
+  String get headersUpdated => _localizedValues[locale.languageCode]?['headersUpdated'] ?? 'Headers updated';
+  String get uploadToServer => _localizedValues[locale.languageCode]?['uploadToServer'] ?? 'Upload to Server';
+  String get uploadSuccess => _localizedValues[locale.languageCode]?['uploadSuccess'] ?? 'Upload successful';
+  String get uploadFailed => _localizedValues[locale.languageCode]?['uploadFailed'] ?? 'Upload failed';
+  String get uploading => _localizedValues[locale.languageCode]?['uploading'] ?? 'Uploading...';
+  String get uploadStatus => _localizedValues[locale.languageCode]?['uploadStatus'] ?? 'Upload Status';
+  String get pending => _localizedValues[locale.languageCode]?['pending'] ?? 'Pending';
+  String get uploaded => _localizedValues[locale.languageCode]?['uploaded'] ?? 'Uploaded';
 
   // 带参数的方法
   String importedOn(String date, String time) {

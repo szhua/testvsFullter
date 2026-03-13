@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:csv/csv.dart';
+import 'package:dio/dio.dart';
 import 'package:syncfusion_flutter_xlsio/xlsio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -13,6 +14,10 @@ import 'storage_service.dart';
 
 class ExcelService {
   final StorageService _storageService = StorageService();
+  final Dio _dio = Dio();
+
+  // 服务器地址
+  static const String _baseUrl = 'http://10.181.22.140:14000';
 
   Future<Map<String, dynamic>?> pickAndReadExcel() async {
     try {
@@ -38,12 +43,20 @@ class ExcelService {
     }
   }
 
-  Map<String, dynamic> parseCsvBytes(Uint8List bytes, String fileName, {int headerRow = 0}) {
+  Map<String, dynamic> parseCsvBytes(
+    Uint8List bytes,
+    String fileName, {
+    int headerRow = 0,
+  }) {
     final String csvString = utf8.decode(bytes);
     return parseCsvString(csvString, fileName, headerRow: headerRow);
   }
 
-  Map<String, dynamic> parseCsvString(String csvString, String fileName, {int headerRow = 0}) {
+  Map<String, dynamic> parseCsvString(
+    String csvString,
+    String fileName, {
+    int headerRow = 0,
+  }) {
     // 检测分隔符：优先检测制表符，其次逗号
     final lines = csvString.split('\n');
     final firstLine = lines.isNotEmpty ? lines[0] : '';
@@ -53,8 +66,10 @@ class ExcelService {
 
     debugPrint('CSV分隔符检测: ${fieldDelimiter == '\t' ? 'Tab' : '逗号'}');
 
-    final List<List<dynamic>> csvData = const CsvToListConverter()
-        .convert(csvString, fieldDelimiter: fieldDelimiter);
+    final List<List<dynamic>> csvData = const CsvToListConverter().convert(
+      csvString,
+      fieldDelimiter: fieldDelimiter,
+    );
 
     final Map<String, dynamic> result = {
       'fileName': fileName,
@@ -102,12 +117,18 @@ class ExcelService {
     };
     result['totalRows'] = sheetData.length;
 
-    debugPrint('CSV文件解析完成: $fileName, 表头数: ${headers.length}, 数据行数: ${sheetData.length}');
+    debugPrint(
+      'CSV文件解析完成: $fileName, 表头数: ${headers.length}, 数据行数: ${sheetData.length}',
+    );
     return result;
   }
 
   /// 使用XML直接解析xlsx文件（绑过numFmtId验证问题）
-  Map<String, dynamic> parseExcelBytes(Uint8List bytes, String fileName, {int headerRow = 0}) {
+  Map<String, dynamic> parseExcelBytes(
+    Uint8List bytes,
+    String fileName, {
+    int headerRow = 0,
+  }) {
     try {
       return _parseXlsxXml(bytes, fileName, headerRow: headerRow);
     } catch (e, stackTrace) {
@@ -117,7 +138,11 @@ class ExcelService {
     }
   }
 
-  Map<String, dynamic> _parseXlsxXml(Uint8List bytes, String fileName, {int headerRow = 0}) {
+  Map<String, dynamic> _parseXlsxXml(
+    Uint8List bytes,
+    String fileName, {
+    int headerRow = 0,
+  }) {
     final Map<String, dynamic> result = {
       'fileName': fileName,
       'sheets': <String, dynamic>{},
@@ -167,7 +192,8 @@ class ExcelService {
     // 读取工作表
     int totalRows = 0;
     for (final file in archive) {
-      if (file.name.startsWith('xl/worksheets/sheet') && file.name.endsWith('.xml')) {
+      if (file.name.startsWith('xl/worksheets/sheet') &&
+          file.name.endsWith('.xml')) {
         final sheetName = 'Sheet${file.name.replaceAll(RegExp(r'[^0-9]'), '')}';
 
         final content = utf8.decode(file.content as List<int>);
@@ -268,7 +294,9 @@ class ExcelService {
           'rowCount': sheetData.length,
         };
 
-        debugPrint('工作表 $sheetName 解析完成，表头数: ${headers.length}, 数据行数: ${sheetData.length}');
+        debugPrint(
+          '工作表 $sheetName 解析完成，表头数: ${headers.length}, 数据行数: ${sheetData.length}',
+        );
         totalRows += sheetData.length;
       }
     }
@@ -317,7 +345,9 @@ class ExcelService {
             rowCount: data['totalRows'] as int,
             sheetCount: (data['sheetNames'] as List).length,
             importTime: DateTime.now(),
-            jsonPreview: const JsonEncoder.withIndent('  ').convert(data['sheets']),
+            jsonPreview: const JsonEncoder.withIndent(
+              '  ',
+            ).convert(data['sheets']),
             sheetNames: List<String>.from(data['sheetNames']),
           );
 
@@ -347,6 +377,88 @@ class ExcelService {
     await _storageService.deleteRecord(id);
   }
 
+  Future<void> updateRecord(ImportRecord record) async {
+    await _storageService.updateRecord(record);
+  }
+
+  /// 发送数据到服务器
+  Future<bool> sendDataToServer(
+    ImportRecord record,
+    Map<String, dynamic> data, {
+    String? customKey,
+  }) async {
+    try {
+      // 将整个数据转换为JSON字符串
+      final jsonStr = jsonEncode(data);
+
+      // 使用文件名作为key，或使用自定义key
+      final key =
+          customKey ??
+          record.fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+
+      final response = await _dio.post(
+        '$_baseUrl/serviceRequest/setKeyValue',
+        data: {'key': key, 'value': jsonStr},
+        options: Options(contentType: 'application/x-www-form-urlencoded'),
+      );
+
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      debugPrint('上传数据到服务器失败: ${e.message}');
+      return false;
+    } catch (e) {
+      debugPrint('上传数据到服务器失败: $e');
+      return false;
+    }
+  }
+
+  /// 上传记录数据到服务器并更新状态
+  Future<ImportRecord> uploadRecordToServer(ImportRecord record) async {
+    // 更新状态为上传中
+    var updatedRecord = record.copyWith(uploadStatus: UploadStatus.uploading);
+    await _storageService.updateRecord(updatedRecord);
+
+    try {
+      // 解析JSON数据
+      Map<String, dynamic>? data;
+      if (record.jsonPreview != null && record.jsonPreview!.isNotEmpty) {
+        data = jsonDecode(record.jsonPreview!) as Map<String, dynamic>;
+      }
+
+      if (data == null) {
+        updatedRecord = updatedRecord.copyWith(
+          uploadStatus: UploadStatus.failed,
+          uploadError: 'No data to upload',
+        );
+        await _storageService.updateRecord(updatedRecord);
+        return updatedRecord;
+      }
+
+      // 发送数据
+      final success = await sendDataToServer(record, data);
+
+      if (success) {
+        updatedRecord = updatedRecord.copyWith(
+          uploadStatus: UploadStatus.success,
+          uploadTime: DateTime.now(),
+        );
+      } else {
+        updatedRecord = updatedRecord.copyWith(
+          uploadStatus: UploadStatus.failed,
+          uploadError: 'Server returned error',
+        );
+      }
+    } catch (e) {
+      updatedRecord = updatedRecord.copyWith(
+        uploadStatus: UploadStatus.failed,
+        uploadError: e.toString(),
+      );
+    }
+
+    await _storageService.updateRecord(updatedRecord);
+    return updatedRecord;
+  }
+
   Future<String?> exportRecordsToExcel(List<ImportRecord> records) async {
     try {
       final workbook = Workbook();
@@ -368,14 +480,17 @@ class ExcelService {
         sheet.getRangeByIndex(row, 2).setText(record.fileName);
         sheet.getRangeByIndex(row, 3).setNumber(record.sheetCount.toDouble());
         sheet.getRangeByIndex(row, 4).setNumber(record.rowCount.toDouble());
-        sheet.getRangeByIndex(row, 5).setText(
-          '${record.importTime.year}-${record.importTime.month.toString().padLeft(2, '0')}-${record.importTime.day.toString().padLeft(2, '0')} ${record.importTime.hour.toString().padLeft(2, '0')}:${record.importTime.minute.toString().padLeft(2, '0')}:${record.importTime.second.toString().padLeft(2, '0')}',
-        );
+        sheet
+            .getRangeByIndex(row, 5)
+            .setText(
+              '${record.importTime.year}-${record.importTime.month.toString().padLeft(2, '0')}-${record.importTime.day.toString().padLeft(2, '0')} ${record.importTime.hour.toString().padLeft(2, '0')}:${record.importTime.minute.toString().padLeft(2, '0')}:${record.importTime.second.toString().padLeft(2, '0')}',
+            );
         sheet.getRangeByIndex(row, 6).setText(record.sheetNames.join(', '));
       }
 
       // 保存文件
-      final directory = await getDownloadsDirectory() ??
+      final directory =
+          await getDownloadsDirectory() ??
           await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now()
           .toString()
@@ -423,12 +538,15 @@ class ExcelService {
 
         for (var colIdx = 0; colIdx < headers.length; colIdx++) {
           final value = row[headers[colIdx]];
-          sheet.getRangeByIndex(excelRow, colIdx + 1).setText(value?.toString() ?? '');
+          sheet
+              .getRangeByIndex(excelRow, colIdx + 1)
+              .setText(value?.toString() ?? '');
         }
       }
 
       // 保存文件
-      final directory = await getDownloadsDirectory() ??
+      final directory =
+          await getDownloadsDirectory() ??
           await getApplicationDocumentsDirectory();
       final timestamp = DateTime.now()
           .toString()

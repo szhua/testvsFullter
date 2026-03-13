@@ -1,5 +1,13 @@
 import 'dart:convert';
 
+/// 上传状态枚举
+enum UploadStatus {
+  pending,    // 待上传
+  uploading,  // 上传中
+  success,    // 上传成功
+  failed,     // 上传失败
+}
+
 class ImportRecord {
   final String id;
   final String fileName;
@@ -8,6 +16,9 @@ class ImportRecord {
   final DateTime importTime;
   final String? jsonPreview;
   final List<String> sheetNames;
+  final UploadStatus uploadStatus;
+  final String? uploadError;
+  final DateTime? uploadTime;
 
   ImportRecord({
     required this.id,
@@ -17,6 +28,9 @@ class ImportRecord {
     required this.importTime,
     this.jsonPreview,
     required this.sheetNames,
+    this.uploadStatus = UploadStatus.pending,
+    this.uploadError,
+    this.uploadTime,
   });
 
   Map<String, dynamic> toMap() {
@@ -28,6 +42,9 @@ class ImportRecord {
       'importTime': importTime.toIso8601String(),
       'jsonPreview': jsonPreview,
       'sheetNames': sheetNames,
+      'uploadStatus': uploadStatus.name,
+      'uploadError': uploadError,
+      'uploadTime': uploadTime?.toIso8601String(),
     };
   }
 
@@ -44,6 +61,36 @@ class ImportRecord {
       sheetNames: map['sheetNames'] != null
           ? List<String>.from(map['sheetNames'] as List)
           : [],
+      uploadStatus: map['uploadStatus'] != null
+          ? UploadStatus.values.firstWhere(
+              (e) => e.name == map['uploadStatus'],
+              orElse: () => UploadStatus.pending,
+            )
+          : UploadStatus.pending,
+      uploadError: map['uploadError']?.toString(),
+      uploadTime: map['uploadTime'] != null
+          ? DateTime.tryParse(map['uploadTime'].toString())
+          : null,
+    );
+  }
+
+  /// 创建带有更新上传状态的副本
+  ImportRecord copyWith({
+    UploadStatus? uploadStatus,
+    String? uploadError,
+    DateTime? uploadTime,
+  }) {
+    return ImportRecord(
+      id: id,
+      fileName: fileName,
+      rowCount: rowCount,
+      sheetCount: sheetCount,
+      importTime: importTime,
+      jsonPreview: jsonPreview,
+      sheetNames: sheetNames,
+      uploadStatus: uploadStatus ?? this.uploadStatus,
+      uploadError: uploadError ?? this.uploadError,
+      uploadTime: uploadTime ?? this.uploadTime,
     );
   }
 

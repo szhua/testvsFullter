@@ -21,6 +21,8 @@ class _ImportScreenState extends State<ImportScreen> {
   String? _selectedSheet;
   bool _isLoading = false;
   ImportRecord? _lastRecord;
+  List<String> _editableHeaders = []; // 可编辑的headers
+  bool _isUploading = false; // 上传状态
 
   Future<void> _pickAndImportExcel() async {
     setState(() => _isLoading = true);
@@ -39,10 +41,20 @@ class _ImportScreenState extends State<ImportScreen> {
           debugPrint('JSON解析错误: $e');
         }
 
+        // 获取第一个sheet的headers用于编辑
+        List<String> headers = [];
+        if (parsedData != null && parsedData.isNotEmpty) {
+          final firstSheet = parsedData.values.first;
+          if (firstSheet is Map && firstSheet['headers'] is List) {
+            headers = List<String>.from(firstSheet['headers']);
+          }
+        }
+
         setState(() {
           _lastRecord = record;
           _parsedData = parsedData ?? {};
           _selectedSheet = _parsedData?.keys.firstOrNull;
+          _editableHeaders = headers;
         });
 
         if (mounted) {
@@ -51,17 +63,19 @@ class _ImportScreenState extends State<ImportScreen> {
         }
       }
     } catch (e) {
-      final l10n = AppLocalizations.of(context)!;
       final errorStr = e.toString();
-      String userMessage = l10n.importFailed;
-
-      if (errorStr.contains('numFmtId') || errorStr.contains('custom number format')) {
-        userMessage = l10n.unsupportedFormat;
-      } else if (errorStr.contains('Invalid') || errorStr.contains('format') || errorStr.contains('OLE2')) {
-        userMessage = l10n.unsupportedExcelFormat;
-      }
+      String userMessage;
 
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        userMessage = l10n.importFailed;
+
+        if (errorStr.contains('numFmtId') || errorStr.contains('custom number format')) {
+          userMessage = l10n.unsupportedFormat;
+        } else if (errorStr.contains('Invalid') || errorStr.contains('format') || errorStr.contains('OLE2')) {
+          userMessage = l10n.unsupportedExcelFormat;
+        }
+
         _showToast(userMessage, isError: true);
       }
     } finally {
@@ -121,6 +135,169 @@ class _ImportScreenState extends State<ImportScreen> {
       }
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  /// 显示编辑Header的对话框
+  Future<void> _showEditHeadersDialog() async {
+    if (_editableHeaders.isEmpty) return;
+
+    final l10n = AppLocalizations.of(context)!;
+    final controllers = _editableHeaders
+        .map((h) => TextEditingController(text: h))
+        .toList();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.edit_outlined, color: Color(0xFF1F883D)),
+            const SizedBox(width: 8),
+            Text(l10n.editHeaders),
+          ],
+        ),
+        content: SizedBox(
+          width: 400,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: controllers.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 30,
+                      child: Text(
+                        '${index + 1}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF57606A),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: controllers[index],
+                        decoration: InputDecoration(
+                          hintText: '${l10n.column} ${index + 1}',
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.save),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      // 更新headers
+      final newHeaders = controllers.map((c) => c.text.trim()).toList();
+
+      // 更新parsedData中的headers
+      if (_parsedData != null && _selectedSheet != null) {
+        final sheetData = _parsedData![_selectedSheet];
+        if (sheetData is Map<String, dynamic>) {
+          final oldHeaders = sheetData['headers'] as List;
+          final data = sheetData['data'] as List;
+
+          // 创建映射
+          final headerMap = <String, String>{};
+          for (var i = 0; i < oldHeaders.length && i < newHeaders.length; i++) {
+            headerMap[oldHeaders[i].toString()] = newHeaders[i];
+          }
+
+          // 更新data中的key
+          final newData = data.map((row) {
+            final newRow = <String, dynamic>{};
+            (row as Map<String, dynamic>).forEach((key, value) {
+              final newKey = headerMap[key] ?? key;
+              newRow[newKey] = value;
+            });
+            return newRow;
+          }).toList();
+
+          // 更新状态
+          setState(() {
+            _editableHeaders = newHeaders;
+            _parsedData![_selectedSheet!] = {
+              'headers': newHeaders,
+              'data': newData,
+              'rowCount': sheetData['rowCount'],
+            };
+          });
+        }
+      }
+
+      // 清理controllers
+      for (var c in controllers) {
+        c.dispose();
+      }
+
+      _showToast(l10n.headersUpdated, isError: false);
+    }
+  }
+
+  /// 上传数据到服务器
+  Future<void> _uploadToServer() async {
+    if (_lastRecord == null || _parsedData == null) return;
+
+    setState(() => _isUploading = true);
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      // 先更新记录的jsonPreview
+      final updatedJsonPreview = jsonEncode(_parsedData);
+      final updatedRecord = ImportRecord(
+        id: _lastRecord!.id,
+        fileName: _lastRecord!.fileName,
+        rowCount: _lastRecord!.rowCount,
+        sheetCount: _lastRecord!.sheetCount,
+        importTime: _lastRecord!.importTime,
+        jsonPreview: updatedJsonPreview,
+        sheetNames: _lastRecord!.sheetNames,
+        uploadStatus: UploadStatus.uploading,
+      );
+
+      // 上传到服务器
+      final result = await _excelService.uploadRecordToServer(updatedRecord);
+
+      setState(() {
+        _lastRecord = result;
+      });
+
+      if (result.uploadStatus == UploadStatus.success) {
+        if (mounted) _showToast(l10n.uploadSuccess, isError: false);
+      } else {
+        if (mounted) _showToast('${l10n.uploadFailed}: ${result.uploadError}', isError: true);
+      }
+    } catch (e) {
+      if (mounted) _showToast('${l10n.uploadFailed}: $e', isError: true);
+    } finally {
+      setState(() => _isUploading = false);
     }
   }
 
@@ -525,6 +702,12 @@ class _ImportScreenState extends State<ImportScreen> {
                 Row(
                   children: [
                     TextButton.icon(
+                      onPressed: _editableHeaders.isNotEmpty ? _showEditHeadersDialog : null,
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: Text(l10n.editHeaders),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
                       onPressed: _copyJsonToClipboard,
                       icon: const Icon(Icons.copy_outlined, size: 16),
                       label: Text(l10n.copy),
@@ -549,29 +732,65 @@ class _ImportScreenState extends State<ImportScreen> {
                 color: Color(0xFFF6F8FA),
                 border: Border(bottom: BorderSide(color: Color(0xFFD0D7DE))),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  GitHubFileIcon(fileName: _lastRecord!.fileName),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _lastRecord!.fileName,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF24292F),
+                  Row(
+                    children: [
+                      GitHubFileIcon(fileName: _lastRecord!.fileName),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _lastRecord!.fileName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF24292F),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${_lastRecord!.rowCount} ${l10n.rows} • ${_lastRecord!.sheetCount} ${l10n.sheets}',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF57606A)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Upload status and button
+                  Row(
+                    children: [
+                      // Upload status badge
+                      _buildUploadStatusBadge(_lastRecord!, l10n),
+                      const Spacer(),
+                      // Upload button
+                      if (_isUploading)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF1F883D),
+                          ),
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: _lastRecord!.uploadStatus == UploadStatus.uploading
+                              ? null
+                              : _uploadToServer,
+                          icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                          label: Text(l10n.uploadToServer),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _lastRecord!.uploadStatus == UploadStatus.success
+                                ? const Color(0xFF1F883D)
+                                : null,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_lastRecord!.rowCount} ${l10n.rows} • ${_lastRecord!.sheetCount} ${l10n.sheets}',
-                          style: const TextStyle(fontSize: 12, color: Color(0xFF57606A)),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -699,6 +918,63 @@ class _ImportScreenState extends State<ImportScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildUploadStatusBadge(ImportRecord record, AppLocalizations l10n) {
+    Color bgColor;
+    Color textColor;
+    String label;
+    IconData icon;
+
+    switch (record.uploadStatus) {
+      case UploadStatus.pending:
+        bgColor = const Color(0xFFF6F8FA);
+        textColor = const Color(0xFF57606A);
+        label = l10n.pending;
+        icon = Icons.schedule;
+        break;
+      case UploadStatus.uploading:
+        bgColor = const Color(0xFFFFF8C5);
+        textColor = const Color(0xFF9A6700);
+        label = l10n.uploading;
+        icon = Icons.sync;
+        break;
+      case UploadStatus.success:
+        bgColor = const Color(0xFFDAFBE1);
+        textColor = const Color(0xFF1F883D);
+        label = l10n.uploaded;
+        icon = Icons.check_circle_outline;
+        break;
+      case UploadStatus.failed:
+        bgColor = const Color(0xFFFFEBE9);
+        textColor = const Color(0xFFCF222E);
+        label = l10n.uploadFailed;
+        icon = Icons.error_outline;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: textColor),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: textColor,
+            ),
+          ),
+        ],
       ),
     );
   }
