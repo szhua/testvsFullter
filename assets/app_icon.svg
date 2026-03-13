@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1F883D"/>
+      <stop offset="100%" style="stop-color:#2EA043"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="200" ry="200" fill="url(#bgGradient)"/>
+
+  <!-- 表格图标 -->
+  <g transform="translate(200, 180)">
+    <!-- 表格外框 -->
+    <rect x="0" y="0" width="500" height="480" rx="20" ry="20" fill="none" stroke="white" stroke-width="24"/>
+
+    <!-- 横线 -->
+    <line x1="0" y1="120" x2="500" y2="120" stroke="white" stroke-width="20"/>
+    <line x1="0" y1="240" x2="500" y2="240" stroke="white" stroke-width="20"/>
+    <line x1="0" y1="360" x2="500" y2="360" stroke="white" stroke-width="20"/>
+
+    <!-- 竖线 -->
+    <line x1="166" y1="0" x2="166" y2="480" stroke="white" stroke-width="20"/>
+    <line x1="332" y1="0" x2="332" y2="480" stroke="white" stroke-width="20"/>
+  </g>
+
+  <!-- 上传箭头 -->
+  <g transform="translate(760, 720)">
+    <!-- 箭头主体 -->
+    <rect x="20" y="60" width="40" height="120" rx="10" fill="white"/>
+    <!-- 箭头头部 -->
+    <polygon points="40,0 80,80 0,80" fill="white"/>
+  </g>
+
+  <!-- Excel 标志 -->
+  <text x="512" y="920" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle">Excel Importer</text>
+</svg>
