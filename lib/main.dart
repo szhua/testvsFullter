@@ -199,6 +199,7 @@ class AppLocalizations {
       'headersLabel': 'Headers',
       'serverResponse': 'Server Response',
       'reupload': 'Re-upload',
+      'refresh': 'Refresh',
     },
     'zh': {
       'appTitle': 'Excel导入工具',
@@ -269,6 +270,7 @@ class AppLocalizations {
       'headersLabel': '表头',
       'serverResponse': '服务器响应',
       'reupload': '重新上传',
+      'refresh': '刷新',
     },
   };
 
@@ -339,6 +341,7 @@ class AppLocalizations {
   String get headersLabel => _localizedValues[locale.languageCode]?['headersLabel'] ?? 'Headers';
   String get serverResponse => _localizedValues[locale.languageCode]?['serverResponse'] ?? 'Server Response';
   String get reupload => _localizedValues[locale.languageCode]?['reupload'] ?? 'Re-upload';
+  String get refresh => _localizedValues[locale.languageCode]?['refresh'] ?? 'Refresh';
 
   // 带参数的方法
   String importedOn(String date, String time) {

@@ -238,14 +238,18 @@ class _ImportScreenState extends State<ImportScreen> {
             return newRow;
           }).toList();
 
+          // 创建新的 Map 对象来触发 Flutter 重建
+          final newParsedData = Map<String, dynamic>.from(_parsedData!);
+          newParsedData[_selectedSheet!] = {
+            'headers': newHeaders,
+            'data': newData,
+            'rowCount': sheetData['rowCount'],
+          };
+
           // 更新状态
           setState(() {
             _editableHeaders = newHeaders;
-            _parsedData![_selectedSheet!] = {
-              'headers': newHeaders,
-              'data': newData,
-              'rowCount': sheetData['rowCount'],
-            };
+            _parsedData = newParsedData;
           });
         }
       }

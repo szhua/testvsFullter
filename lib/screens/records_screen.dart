@@ -345,6 +345,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
           ],
         ),
         actions: [
+          TextButton.icon(
+            onPressed: _loadRecords,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(l10n.refresh),
+          ),
           if (_records.isNotEmpty) ...[
             TextButton.icon(
               onPressed: _exportRecords,
