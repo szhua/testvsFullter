@@ -717,7 +717,7 @@ class _UploadHistoryDialog extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // 上传历史列表
+            // 上传历史列表 - 按时间倒序排列
             Expanded(
               child: record.uploadHistory.isEmpty
                   ? Center(
@@ -728,10 +728,12 @@ class _UploadHistoryDialog extends StatelessWidget {
                     )
                   : ListView.builder(
                       itemCount: record.uploadHistory.length,
-                      itemBuilder: (context, index) {
-                        final history = record.uploadHistory[index];
-                        final isLast = index == record.uploadHistory.length - 1;
-                        return _buildHistoryItem(history, dateFormat, timeFormat, isLast);
+                      itemBuilder: (ctx, index) {
+                        // 倒序：最新的在最前面
+                        final reversedIndex = record.uploadHistory.length - 1 - index;
+                        final history = record.uploadHistory[reversedIndex];
+                        final isFirst = index == 0;
+                        return _buildHistoryItem(ctx, history, dateFormat, timeFormat, isFirst, l10n);
                       },
                     ),
             ),
@@ -742,10 +744,12 @@ class _UploadHistoryDialog extends StatelessWidget {
   }
 
   Widget _buildHistoryItem(
+    BuildContext context,
     UploadHistory history,
     DateFormat dateFormat,
     DateFormat timeFormat,
-    bool isLast,
+    bool isFirst,
+    AppLocalizations l10n,
   ) {
     Color statusColor;
     Color statusBgColor;
@@ -822,7 +826,7 @@ class _UploadHistoryDialog extends StatelessWidget {
                   color: Color(0xFF57606A),
                 ),
               ),
-              if (isLast) ...[
+              if (isFirst) ...[
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -862,7 +866,96 @@ class _UploadHistoryDialog extends StatelessWidget {
               ),
             ),
           ],
+          // 查看数据按钮
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (history.uploadedData != null && history.uploadedData!.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => _showDataDialog(context, l10n.uploadedData, history.uploadedData!, l10n),
+                  icon: const Icon(Icons.upload_outlined, size: 14),
+                  label: Text(l10n.viewUploadedData, style: const TextStyle(fontSize: 12)),
+                ),
+              if (history.serverResponse != null && history.serverResponse!.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => _showDataDialog(context, l10n.serverResponse, history.serverResponse!, l10n),
+                  icon: const Icon(Icons.download_outlined, size: 14),
+                  label: Text(l10n.viewResponse, style: const TextStyle(fontSize: 12)),
+                ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  void _showDataDialog(BuildContext context, String title, String data, AppLocalizations l10n) {
+    String displayData = data;
+    try {
+      // 尝试格式化 JSON
+      final decoded = jsonDecode(data);
+      displayData = const JsonEncoder.withIndent('  ').convert(decoded);
+    } catch (e) {
+      // 如果不是 JSON，保持原样
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        child: Container(
+          width: 600,
+          height: 500,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF24292F),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D1117),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      displayData,
+                      style: const TextStyle(
+                        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                        fontSize: 12,
+                        color: Color(0xFFC9D1D9),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

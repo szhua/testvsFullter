@@ -211,6 +211,9 @@ class AppLocalizations {
       'noUploadHistory': 'No upload history',
       'latest': 'Latest',
       'error': 'Error',
+      'viewUploadedData': 'Uploaded Data',
+      'viewResponse': 'Response',
+      'uploadedData': 'Uploaded Data',
     },
     'zh': {
       'appTitle': 'Excel导入工具',
@@ -293,6 +296,9 @@ class AppLocalizations {
       'noUploadHistory': '暂无上传记录',
       'latest': '最新',
       'error': '错误',
+      'viewUploadedData': '上传数据',
+      'viewResponse': '返回数据',
+      'uploadedData': '上传数据',
     },
   };
 
@@ -375,6 +381,9 @@ class AppLocalizations {
   String get noUploadHistory => _localizedValues[locale.languageCode]?['noUploadHistory'] ?? 'No upload history';
   String get latest => _localizedValues[locale.languageCode]?['latest'] ?? 'Latest';
   String get error => _localizedValues[locale.languageCode]?['error'] ?? 'Error';
+  String get viewUploadedData => _localizedValues[locale.languageCode]?['viewUploadedData'] ?? 'Uploaded Data';
+  String get viewResponse => _localizedValues[locale.languageCode]?['viewResponse'] ?? 'Response';
+  String get uploadedData => _localizedValues[locale.languageCode]?['uploadedData'] ?? 'Uploaded Data';
 
   // 带参数的方法
   String importedOn(String date, String time) {
