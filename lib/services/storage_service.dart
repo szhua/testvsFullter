@@ -1,54 +1,22 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../models/import_record.dart';
 
 class StorageService {
+  static const String _recordsKey = 'import_records';
   static const String _recordsFileName = 'import_records.json';
   File? _recordsFile;
 
-  Future<File> _getRecordsFile() async {
-    if (_recordsFile != null) return _recordsFile!;
-
-    final directory = await getApplicationDocumentsDirectory();
-    _recordsFile = File(p.join(directory.path, _recordsFileName));
-    return _recordsFile!;
-  }
-
-  Future<void> saveImportRecord(ImportRecord record) async {
-    final records = await getImportRecords();
-    records.insert(0, record);
-
-    final recordsJson = records.map((r) => r.toMap()).toList();
-    final encoded = jsonEncode(recordsJson);
-
-    final file = await _getRecordsFile();
-    await file.writeAsString(encoded);
-
-    debugPrint('===== 保存导入记录 =====');
-    debugPrint('记录ID: ${record.id}');
-    debugPrint('文件名: ${record.fileName}');
-    debugPrint('行数: ${record.rowCount}');
-    debugPrint('总记录数: ${records.length}');
-    debugPrint('保存路径: ${file.path}');
-    debugPrint('======================');
-  }
-
   Future<List<ImportRecord>> getImportRecords() async {
     try {
-      final file = await _getRecordsFile();
-
-      if (!await file.exists()) {
-        debugPrint('记录文件不存在，返回空列表');
-        return [];
-      }
-
-      final recordsJson = await file.readAsString();
+      final recordsJson = await _readRecordsData();
 
       if (recordsJson.isEmpty) {
-        debugPrint('记录文件为空');
+        debugPrint('记录为空');
         return [];
       }
 
@@ -77,13 +45,64 @@ class StorageService {
     }
   }
 
+  Future<String> _readRecordsData() async {
+    if (kIsWeb) {
+      // Web 平台使用 SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_recordsKey) ?? '';
+    } else {
+      // 桌面平台使用文件
+      final file = await _getRecordsFile();
+      if (!await file.exists()) {
+        return '';
+      }
+      return await file.readAsString();
+    }
+  }
+
+  Future<void> _writeRecordsData(String data) async {
+    if (kIsWeb) {
+      // Web 平台使用 SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_recordsKey, data);
+    } else {
+      // 桌面平台使用文件
+      final file = await _getRecordsFile();
+      await file.writeAsString(data);
+    }
+  }
+
+  Future<File> _getRecordsFile() async {
+    if (_recordsFile != null) return _recordsFile!;
+
+    final directory = await getApplicationDocumentsDirectory();
+    _recordsFile = File(p.join(directory.path, _recordsFileName));
+    return _recordsFile!;
+  }
+
+  Future<void> saveImportRecord(ImportRecord record) async {
+    final records = await getImportRecords();
+    records.insert(0, record);
+
+    final recordsJson = records.map((r) => r.toMap()).toList();
+    final encoded = jsonEncode(recordsJson);
+
+    await _writeRecordsData(encoded);
+
+    debugPrint('===== 保存导入记录 =====');
+    debugPrint('记录ID: ${record.id}');
+    debugPrint('文件名: ${record.fileName}');
+    debugPrint('行数: ${record.rowCount}');
+    debugPrint('总记录数: ${records.length}');
+    debugPrint('======================');
+  }
+
   Future<void> deleteRecord(String id) async {
     final records = await getImportRecords();
     records.removeWhere((r) => r.id == id);
 
     final recordsJson = records.map((r) => r.toMap()).toList();
-    final file = await _getRecordsFile();
-    await file.writeAsString(jsonEncode(recordsJson));
+    await _writeRecordsData(jsonEncode(recordsJson));
   }
 
   Future<void> updateRecord(ImportRecord updatedRecord) async {
@@ -93,20 +112,27 @@ class StorageService {
     if (index != -1) {
       records[index] = updatedRecord;
       final recordsJson = records.map((r) => r.toMap()).toList();
-      final file = await _getRecordsFile();
-      await file.writeAsString(jsonEncode(recordsJson));
+      await _writeRecordsData(jsonEncode(recordsJson));
     }
   }
 
   Future<void> clearRecords() async {
-    final file = await _getRecordsFile();
-    if (await file.exists()) {
-      await file.delete();
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_recordsKey);
+    } else {
+      final file = await _getRecordsFile();
+      if (await file.exists()) {
+        await file.delete();
+      }
     }
   }
 
-  /// 获取存储文件路径
-  Future<String> getStoragePath() async {
+  /// 获取存储路径（仅桌面平台有效）
+  Future<String?> getStoragePath() async {
+    if (kIsWeb) {
+      return null;
+    }
     final file = await _getRecordsFile();
     return file.path;
   }
