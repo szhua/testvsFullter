@@ -417,6 +417,7 @@ class ExcelService {
   }) async {
     final id = DateTime.now().millisecondsSinceEpoch.toString();
     final jsonPreview = const JsonEncoder.withIndent('  ').convert(sheetsData);
+    final uploadedDataJson = jsonEncode(sheetsData);
 
     // 创建初始记录
     var record = ImportRecord(
@@ -424,11 +425,18 @@ class ExcelService {
       fileName: fileName,
       rowCount: rowCount,
       sheetCount: sheetCount,
-      uploadTime: DateTime.now(),
+      createdAt: DateTime.now(),
       jsonPreview: jsonPreview,
       sheetNames: sheetNames,
-      uploadStatus: UploadStatus.uploading,
+    );
+
+    // 创建上传历史记录
+    UploadHistory uploadHistory = UploadHistory(
+      id: '${id}_${DateTime.now().millisecondsSinceEpoch}',
+      uploadTime: DateTime.now(),
+      status: UploadStatus.uploading,
       headers: headers,
+      uploadedData: uploadedDataJson,
     );
 
     try {
@@ -437,97 +445,149 @@ class ExcelService {
         '$_baseUrl/serviceRequest/setKeyValue',
         data: {
           'key': fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_'),
-          'value': jsonEncode(sheetsData),
+          'value': uploadedDataJson,
         },
         options: Options(contentType: 'application/x-www-form-urlencoded'),
       );
 
       if (response.statusCode == 200) {
-        // 上传成功，保存记录
-        record = record.copyWith(
-          uploadStatus: UploadStatus.success,
+        // 上传成功
+        uploadHistory = UploadHistory(
+          id: uploadHistory.id,
           uploadTime: DateTime.now(),
+          status: UploadStatus.success,
           serverResponse: response.data?.toString(),
+          headers: headers,
+          uploadedData: uploadedDataJson,
         );
       } else {
-        record = record.copyWith(
-          uploadStatus: UploadStatus.failed,
-          uploadError: 'Server returned status ${response.statusCode}',
+        uploadHistory = UploadHistory(
+          id: uploadHistory.id,
+          uploadTime: DateTime.now(),
+          status: UploadStatus.failed,
+          errorMessage: 'Server returned status ${response.statusCode}',
+          headers: headers,
+          uploadedData: uploadedDataJson,
         );
       }
     } on DioException catch (e) {
-      record = record.copyWith(
-        uploadStatus: UploadStatus.failed,
-        uploadError: e.message ?? 'Network error',
+      uploadHistory = UploadHistory(
+        id: uploadHistory.id,
+        uploadTime: DateTime.now(),
+        status: UploadStatus.failed,
+        errorMessage: e.message ?? 'Network error',
+        headers: headers,
+        uploadedData: uploadedDataJson,
       );
     } catch (e) {
-      record = record.copyWith(
-        uploadStatus: UploadStatus.failed,
-        uploadError: e.toString(),
+      uploadHistory = UploadHistory(
+        id: uploadHistory.id,
+        uploadTime: DateTime.now(),
+        status: UploadStatus.failed,
+        errorMessage: e.toString(),
+        headers: headers,
+        uploadedData: uploadedDataJson,
       );
     }
 
-    // 保存记录（无论成功或失败）
+    // 添加上传历史并保存记录
+    record = record.addUploadHistory(uploadHistory);
     await _storageService.saveImportRecord(record);
     return record;
   }
 
   /// 重新上传记录
   Future<ImportRecord> reuploadRecord(ImportRecord record, {Map<String, dynamic>? updatedData}) async {
-    // 更新状态为上传中
-    var updatedRecord = record.copyWith(uploadStatus: UploadStatus.uploading);
-    await _storageService.updateRecord(updatedRecord);
+    Map<String, dynamic>? data = updatedData;
+    if (data == null && record.jsonPreview != null && record.jsonPreview!.isNotEmpty) {
+      try {
+        data = jsonDecode(record.jsonPreview!) as Map<String, dynamic>;
+      } catch (e) {
+        debugPrint('解析数据失败: $e');
+        return record;
+      }
+    }
+
+    if (data == null) {
+      return record;
+    }
+
+    final uploadedDataJson = jsonEncode(data);
+
+    // 获取当前headers
+    List<String> headers = [];
+    if (data.isNotEmpty) {
+      final firstSheet = data.values.first;
+      if (firstSheet is Map && firstSheet['headers'] is List) {
+        headers = List<String>.from(firstSheet['headers']);
+      }
+    }
+
+    // 创建上传历史记录
+    UploadHistory uploadHistory = UploadHistory(
+      id: '${record.id}_${DateTime.now().millisecondsSinceEpoch}',
+      uploadTime: DateTime.now(),
+      status: UploadStatus.uploading,
+      headers: headers,
+      uploadedData: uploadedDataJson,
+    );
 
     try {
-      // 使用更新后的数据或原始数据
-      Map<String, dynamic>? data = updatedData;
-      if (data == null && record.jsonPreview != null && record.jsonPreview!.isNotEmpty) {
-        data = jsonDecode(record.jsonPreview!) as Map<String, dynamic>;
-      }
-
-      if (data == null) {
-        updatedRecord = updatedRecord.copyWith(
-          uploadStatus: UploadStatus.failed,
-          uploadError: 'No data to upload',
-        );
-        await _storageService.updateRecord(updatedRecord);
-        return updatedRecord;
-      }
-
       final response = await _dio.post(
         '$_baseUrl/serviceRequest/setKeyValue',
         data: {
           'key': record.fileName.replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_'),
-          'value': jsonEncode(data),
+          'value': uploadedDataJson,
         },
         options: Options(contentType: 'application/x-www-form-urlencoded'),
       );
 
       if (response.statusCode == 200) {
-        updatedRecord = updatedRecord.copyWith(
-          uploadStatus: UploadStatus.success,
+        uploadHistory = UploadHistory(
+          id: uploadHistory.id,
           uploadTime: DateTime.now(),
+          status: UploadStatus.success,
           serverResponse: response.data?.toString(),
-          jsonPreview: updatedData != null ? const JsonEncoder.withIndent('  ').convert(updatedData) : null,
+          headers: headers,
+          uploadedData: uploadedDataJson,
         );
       } else {
-        updatedRecord = updatedRecord.copyWith(
-          uploadStatus: UploadStatus.failed,
-          uploadError: 'Server returned status ${response.statusCode}',
+        uploadHistory = UploadHistory(
+          id: uploadHistory.id,
+          uploadTime: DateTime.now(),
+          status: UploadStatus.failed,
+          errorMessage: 'Server returned status ${response.statusCode}',
+          headers: headers,
+          uploadedData: uploadedDataJson,
         );
       }
     } on DioException catch (e) {
-      updatedRecord = updatedRecord.copyWith(
-        uploadStatus: UploadStatus.failed,
-        uploadError: e.message ?? 'Network error',
+      uploadHistory = UploadHistory(
+        id: uploadHistory.id,
+        uploadTime: DateTime.now(),
+        status: UploadStatus.failed,
+        errorMessage: e.message ?? 'Network error',
+        headers: headers,
+        uploadedData: uploadedDataJson,
       );
     } catch (e) {
-      updatedRecord = updatedRecord.copyWith(
-        uploadStatus: UploadStatus.failed,
-        uploadError: e.toString(),
+      uploadHistory = UploadHistory(
+        id: uploadHistory.id,
+        uploadTime: DateTime.now(),
+        status: UploadStatus.failed,
+        errorMessage: e.toString(),
+        headers: headers,
+        uploadedData: uploadedDataJson,
       );
     }
 
+    // 添加上传历史并更新记录
+    var updatedRecord = record.addUploadHistory(uploadHistory);
+    if (updatedData != null) {
+      updatedRecord = updatedRecord.copyWith(
+        jsonPreview: const JsonEncoder.withIndent('  ').convert(updatedData),
+      );
+    }
     await _storageService.updateRecord(updatedRecord);
     return updatedRecord;
   }
@@ -556,7 +616,7 @@ class ExcelService {
         sheet
             .getRangeByIndex(row, 5)
             .setText(
-              '${record.uploadTime.year}-${record.uploadTime.month.toString().padLeft(2, '0')}-${record.uploadTime.day.toString().padLeft(2, '0')} ${record.uploadTime.hour.toString().padLeft(2, '0')}:${record.uploadTime.minute.toString().padLeft(2, '0')}:${record.uploadTime.second.toString().padLeft(2, '0')}',
+              '${record.createdAt.year}-${record.createdAt.month.toString().padLeft(2, '0')}-${record.createdAt.day.toString().padLeft(2, '0')} ${record.createdAt.hour.toString().padLeft(2, '0')}:${record.createdAt.minute.toString().padLeft(2, '0')}:${record.createdAt.second.toString().padLeft(2, '0')}',
             );
         sheet.getRangeByIndex(row, 6).setText(record.sheetNames.join(', '));
       }

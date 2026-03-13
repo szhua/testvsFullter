@@ -203,6 +203,14 @@ class AppLocalizations {
       'refreshed': 'Refreshed',
       'viewData': 'View Data',
       'editRow': 'Edit Row',
+      'uploads': 'uploads',
+      'notUploaded': 'Not uploaded',
+      'uploadHistory': 'History',
+      'upload': 'Upload',
+      'uploadHistoryTitle': 'Upload History',
+      'noUploadHistory': 'No upload history',
+      'latest': 'Latest',
+      'error': 'Error',
     },
     'zh': {
       'appTitle': 'Excel导入工具',
@@ -277,6 +285,14 @@ class AppLocalizations {
       'refreshed': '已刷新',
       'viewData': '查看数据',
       'editRow': '编辑行',
+      'uploads': '次上传',
+      'notUploaded': '未上传',
+      'uploadHistory': '历史',
+      'upload': '上传',
+      'uploadHistoryTitle': '上传历史',
+      'noUploadHistory': '暂无上传记录',
+      'latest': '最新',
+      'error': '错误',
     },
   };
 
@@ -351,6 +367,14 @@ class AppLocalizations {
   String get refreshed => _localizedValues[locale.languageCode]?['refreshed'] ?? 'Refreshed';
   String get viewData => _localizedValues[locale.languageCode]?['viewData'] ?? 'View Data';
   String get editRow => _localizedValues[locale.languageCode]?['editRow'] ?? 'Edit Row';
+  String get uploads => _localizedValues[locale.languageCode]?['uploads'] ?? 'uploads';
+  String get notUploaded => _localizedValues[locale.languageCode]?['notUploaded'] ?? 'Not uploaded';
+  String get uploadHistory => _localizedValues[locale.languageCode]?['uploadHistory'] ?? 'History';
+  String get upload => _localizedValues[locale.languageCode]?['upload'] ?? 'Upload';
+  String get uploadHistoryTitle => _localizedValues[locale.languageCode]?['uploadHistoryTitle'] ?? 'Upload History';
+  String get noUploadHistory => _localizedValues[locale.languageCode]?['noUploadHistory'] ?? 'No upload history';
+  String get latest => _localizedValues[locale.languageCode]?['latest'] ?? 'Latest';
+  String get error => _localizedValues[locale.languageCode]?['error'] ?? 'Error';
 
   // 带参数的方法
   String importedOn(String date, String time) {
@@ -367,6 +391,14 @@ class AppLocalizations {
       return '上传于 $date $time';
     }
     return 'Uploaded on $date at $time';
+  }
+
+  String createdOn(String date, String time) {
+    final isZh = locale.languageCode == 'zh';
+    if (isZh) {
+      return '创建于 $date $time';
+    }
+    return 'Created on $date at $time';
   }
 
   String fileContainsNoData(String fileName, int rowCount) {

@@ -8,32 +8,92 @@ enum UploadStatus {
   failed,     // 上传失败
 }
 
+/// 单次上传记录
+class UploadHistory {
+  final String id;
+  final DateTime uploadTime;
+  final UploadStatus status;
+  final String? serverResponse;
+  final String? errorMessage;
+  final String? uploadedData;  // 上传的数据JSON
+  final List<String> headers;  // 当时的表头
+
+  UploadHistory({
+    required this.id,
+    required this.uploadTime,
+    required this.status,
+    this.serverResponse,
+    this.errorMessage,
+    this.uploadedData,
+    this.headers = const [],
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'uploadTime': uploadTime.toIso8601String(),
+      'status': status.name,
+      'serverResponse': serverResponse,
+      'errorMessage': errorMessage,
+      'uploadedData': uploadedData,
+      'headers': headers,
+    };
+  }
+
+  factory UploadHistory.fromMap(Map<String, dynamic> map) {
+    return UploadHistory(
+      id: map['id']?.toString() ?? '',
+      uploadTime: map['uploadTime'] != null
+          ? DateTime.tryParse(map['uploadTime'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      status: map['status'] != null
+          ? UploadStatus.values.firstWhere(
+              (e) => e.name == map['status'],
+              orElse: () => UploadStatus.pending,
+            )
+          : UploadStatus.pending,
+      serverResponse: map['serverResponse']?.toString(),
+      errorMessage: map['errorMessage']?.toString(),
+      uploadedData: map['uploadedData']?.toString(),
+      headers: map['headers'] != null
+          ? List<String>.from(map['headers'] as List)
+          : [],
+    );
+  }
+}
+
 class ImportRecord {
   final String id;
   final String fileName;
   final int rowCount;
   final int sheetCount;
-  final DateTime uploadTime;  // 上传时间（改为上传成功的时间）
+  final DateTime createdAt;  // 创建时间（解析时间）
   final String? jsonPreview;
   final List<String> sheetNames;
-  final UploadStatus uploadStatus;
-  final String? uploadError;
-  final List<String> headers;  // 修改后的表头
-  final String? serverResponse;  // 服务器返回的数据
+  final List<UploadHistory> uploadHistory;  // 上传历史记录列表
 
   ImportRecord({
     required this.id,
     required this.fileName,
     required this.rowCount,
     required this.sheetCount,
-    required this.uploadTime,
+    required this.createdAt,
     this.jsonPreview,
     required this.sheetNames,
-    this.uploadStatus = UploadStatus.pending,
-    this.uploadError,
-    this.headers = const [],
-    this.serverResponse,
+    this.uploadHistory = const [],
   });
+
+  /// 获取最新的上传状态
+  UploadStatus get uploadStatus {
+    if (uploadHistory.isEmpty) return UploadStatus.pending;
+    return uploadHistory.last.status;
+  }
+
+  /// 获取上传次数
+  int get uploadCount => uploadHistory.length;
+
+  /// 获取成功上传次数
+  int get successUploadCount => uploadHistory.where((h) => h.status == UploadStatus.success).length;
 
   Map<String, dynamic> toMap() {
     return {
@@ -41,13 +101,10 @@ class ImportRecord {
       'fileName': fileName,
       'rowCount': rowCount,
       'sheetCount': sheetCount,
-      'uploadTime': uploadTime.toIso8601String(),
+      'createdAt': createdAt.toIso8601String(),
       'jsonPreview': jsonPreview,
       'sheetNames': sheetNames,
-      'uploadStatus': uploadStatus.name,
-      'uploadError': uploadError,
-      'headers': headers,
-      'serverResponse': serverResponse,
+      'uploadHistory': uploadHistory.map((h) => h.toMap()).toList(),
     };
   }
 
@@ -57,50 +114,51 @@ class ImportRecord {
       fileName: map['fileName']?.toString() ?? '',
       rowCount: map['rowCount'] as int? ?? 0,
       sheetCount: map['sheetCount'] as int? ?? 0,
-      uploadTime: map['uploadTime'] != null
-          ? DateTime.tryParse(map['uploadTime'].toString()) ?? DateTime.now()
-          : map['importTime'] != null  // 兼容旧数据
-              ? DateTime.tryParse(map['importTime'].toString()) ?? DateTime.now()
+      createdAt: map['createdAt'] != null
+          ? DateTime.tryParse(map['createdAt'].toString()) ?? DateTime.now()
+          : map['uploadTime'] != null  // 兼容旧数据
+              ? DateTime.tryParse(map['uploadTime'].toString()) ?? DateTime.now()
               : DateTime.now(),
       jsonPreview: map['jsonPreview']?.toString(),
       sheetNames: map['sheetNames'] != null
           ? List<String>.from(map['sheetNames'] as List)
           : [],
-      uploadStatus: map['uploadStatus'] != null
-          ? UploadStatus.values.firstWhere(
-              (e) => e.name == map['uploadStatus'],
-              orElse: () => UploadStatus.pending,
-            )
-          : UploadStatus.pending,
-      uploadError: map['uploadError']?.toString(),
-      headers: map['headers'] != null
-          ? List<String>.from(map['headers'] as List)
+      uploadHistory: map['uploadHistory'] != null
+          ? (map['uploadHistory'] as List)
+              .map((h) => UploadHistory.fromMap(h as Map<String, dynamic>))
+              .toList()
           : [],
-      serverResponse: map['serverResponse']?.toString(),
     );
   }
 
-  /// 创建带有更新上传状态的副本
+  /// 创建带有新上传记录的副本
+  ImportRecord addUploadHistory(UploadHistory history) {
+    return ImportRecord(
+      id: id,
+      fileName: fileName,
+      rowCount: rowCount,
+      sheetCount: sheetCount,
+      createdAt: createdAt,
+      jsonPreview: jsonPreview,
+      sheetNames: sheetNames,
+      uploadHistory: [...uploadHistory, history],
+    );
+  }
+
+  /// 创建带有更新jsonPreview的副本
   ImportRecord copyWith({
-    UploadStatus? uploadStatus,
-    String? uploadError,
-    DateTime? uploadTime,
-    List<String>? headers,
-    String? serverResponse,
     String? jsonPreview,
+    List<String>? headers,
   }) {
     return ImportRecord(
       id: id,
       fileName: fileName,
       rowCount: rowCount,
       sheetCount: sheetCount,
-      uploadTime: uploadTime ?? this.uploadTime,
+      createdAt: createdAt,
       jsonPreview: jsonPreview ?? this.jsonPreview,
       sheetNames: sheetNames,
-      uploadStatus: uploadStatus ?? this.uploadStatus,
-      uploadError: uploadError ?? this.uploadError,
-      headers: headers ?? this.headers,
-      serverResponse: serverResponse ?? this.serverResponse,
+      uploadHistory: uploadHistory,
     );
   }
 

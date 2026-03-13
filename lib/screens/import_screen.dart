@@ -287,7 +287,10 @@ class _ImportScreenState extends State<ImportScreen> {
       if (record.uploadStatus == UploadStatus.success) {
         if (mounted) _showToast(l10n.uploadSuccess, isError: false);
       } else {
-        if (mounted) _showToast('${l10n.uploadFailed}: ${record.uploadError}', isError: true);
+        final errorMsg = record.uploadHistory.isNotEmpty
+            ? record.uploadHistory.last.errorMessage ?? ''
+            : '';
+        if (mounted) _showToast('${l10n.uploadFailed}${errorMsg.isNotEmpty ? ': $errorMsg' : ''}', isError: true);
       }
     } catch (e) {
       if (mounted) _showToast('${l10n.uploadFailed}: $e', isError: true);

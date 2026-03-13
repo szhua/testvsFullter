@@ -16,7 +16,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   final ExcelService _excelService = ExcelService();
   List<ImportRecord> _records = [];
   bool _isLoading = true;
-  final Map<String, bool> _uploadingIds = {}; // 记录正在上传的ID
+  final Map<String, bool> _uploadingIds = {};
 
   @override
   void initState() {
@@ -119,7 +119,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
   Future<void> _showDataDetail(ImportRecord record) async {
     final l10n = AppLocalizations.of(context)!;
 
-    // 解析JSON数据
     Map<String, dynamic>? sheetsData;
     if (record.jsonPreview != null && record.jsonPreview!.isNotEmpty) {
       try {
@@ -148,20 +147,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
           });
 
           try {
-            // 创建更新后的记录
-            final updatedRecord = record.copyWith(
-              jsonPreview: const JsonEncoder.withIndent('  ').convert(updatedData),
-              headers: newHeaders,
-            );
-
-            final result = await _excelService.reuploadRecord(updatedRecord, updatedData: updatedData);
+            final result = await _excelService.reuploadRecord(record, updatedData: updatedData);
             await _loadRecords();
 
             if (mounted) {
               if (result.uploadStatus == UploadStatus.success) {
                 _showToast(l10n.uploadSuccess, isError: false);
               } else {
-                _showToast('${l10n.uploadFailed}: ${result.uploadError}', isError: true);
+                _showToast(l10n.uploadFailed, isError: true);
               }
             }
           } finally {
@@ -170,6 +163,19 @@ class _RecordsScreenState extends State<RecordsScreen> {
             });
           }
         },
+      ),
+    );
+  }
+
+  /// 显示上传历史
+  Future<void> _showUploadHistory(ImportRecord record) async {
+    final l10n = AppLocalizations.of(context)!;
+
+    await showDialog(
+      context: context,
+      builder: (context) => _UploadHistoryDialog(
+        record: record,
+        l10n: l10n,
       ),
     );
   }
@@ -190,7 +196,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
         if (updatedRecord.uploadStatus == UploadStatus.success) {
           _showToast(l10n.uploadSuccess, isError: false);
         } else {
-          _showToast('${l10n.uploadFailed}: ${updatedRecord.uploadError}', isError: true);
+          _showToast(l10n.uploadFailed, isError: true);
         }
       }
     } finally {
@@ -340,7 +346,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
     return Column(
       children: [
-        // Summary header
         Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
@@ -372,8 +377,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
             ],
           ),
         ),
-
-        // Records list
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -469,9 +472,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
             ),
             subtitle: Row(
               children: [
-                // 上传状态徽章
-                _buildUploadStatusBadge(record, l10n),
-                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
@@ -488,8 +488,49 @@ class _RecordsScreenState extends State<RecordsScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // 上传次数
+                if (record.uploadCount > 0)
+                  GestureDetector(
+                    onTap: () => _showUploadHistory(record),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: record.successUploadCount > 0
+                            ? const Color(0xFFDAFBE1)
+                            : const Color(0xFFFFEBE9),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${record.successUploadCount}/${record.uploadCount} ${l10n.uploads}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: record.successUploadCount > 0
+                              ? const Color(0xFF1F883D)
+                              : const Color(0xFFCF222E),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF6F8FA),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      l10n.notUploaded,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF57606A),
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
                 Text(
-                  dateFormat.format(record.uploadTime),
+                  dateFormat.format(record.createdAt),
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF57606A),
@@ -519,36 +560,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
                             (record.sheetNames.length > 3 ? '...' : ''),
                       ),
                     ],
-                    // 显示修改后的headers
-                    if (record.headers.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.view_column_outlined, size: 14, color: Color(0xFF57606A)),
-                          const SizedBox(width: 8),
-                          Text(
-                            l10n.headersLabel,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF57606A),
-                            ),
-                          ),
-                          const Spacer(),
-                          Flexible(
-                            child: Text(
-                              record.headers.take(5).join(', ') + (record.headers.length > 5 ? '...' : ''),
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF24292F),
-                              ),
-                              textAlign: TextAlign.right,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -559,7 +570,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          l10n.uploadedOn(dateFormat.format(record.uploadTime), timeFormat.format(record.uploadTime)),
+                          l10n.createdOn(dateFormat.format(record.createdAt), timeFormat.format(record.createdAt)),
                           style: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFF8B949E),
@@ -567,40 +578,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
                         ),
                       ],
                     ),
-                    // 显示服务器返回的数据
-                    if (record.serverResponse != null && record.serverResponse!.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        l10n.serverResponse,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF57606A),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 80),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0D1117),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(
-                            record.serverResponse!.length > 200
-                                ? '${record.serverResponse!.substring(0, 200)}...'
-                                : record.serverResponse!,
-                            style: const TextStyle(
-                              fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                              fontSize: 11,
-                              color: Color(0xFFC9D1D9),
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                     // 操作按钮
                     const SizedBox(height: 16),
                     Row(
@@ -616,6 +593,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
                             ),
                           )
                         else ...[
+                          if (record.uploadCount > 0)
+                            TextButton.icon(
+                              onPressed: () => _showUploadHistory(record),
+                              icon: const Icon(Icons.history, size: 16),
+                              label: Text(l10n.uploadHistory),
+                            ),
                           TextButton.icon(
                             onPressed: () => _showDataDetail(record),
                             icon: const Icon(Icons.visibility_outlined, size: 16),
@@ -625,7 +608,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                           ElevatedButton.icon(
                             onPressed: () => _reupload(record),
                             icon: const Icon(Icons.cloud_upload_outlined, size: 16),
-                            label: Text(l10n.reupload),
+                            label: Text(l10n.upload),
                           ),
                         ],
                       ],
@@ -636,63 +619,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildUploadStatusBadge(ImportRecord record, AppLocalizations l10n) {
-    Color bgColor;
-    Color textColor;
-    String label;
-    IconData icon;
-
-    switch (record.uploadStatus) {
-      case UploadStatus.pending:
-        bgColor = const Color(0xFFF6F8FA);
-        textColor = const Color(0xFF57606A);
-        label = l10n.pending;
-        icon = Icons.schedule;
-        break;
-      case UploadStatus.uploading:
-        bgColor = const Color(0xFFFFF8C5);
-        textColor = const Color(0xFF9A6700);
-        label = l10n.uploading;
-        icon = Icons.sync;
-        break;
-      case UploadStatus.success:
-        bgColor = const Color(0xFFDAFBE1);
-        textColor = const Color(0xFF1F883D);
-        label = l10n.uploaded;
-        icon = Icons.check_circle_outline;
-        break;
-      case UploadStatus.failed:
-        bgColor = const Color(0xFFFFEBE9);
-        textColor = const Color(0xFFCF222E);
-        label = l10n.uploadFailed;
-        icon = Icons.error_outline;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: textColor),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: textColor,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -719,6 +645,225 @@ class _RecordsScreenState extends State<RecordsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 上传历史对话框
+class _UploadHistoryDialog extends StatelessWidget {
+  final ImportRecord record;
+  final AppLocalizations l10n;
+
+  const _UploadHistoryDialog({
+    required this.record,
+    required this.l10n,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    final dateFormat = isZh ? DateFormat('yyyy年MM月dd日') : DateFormat('MMM d, yyyy');
+    final timeFormat = isZh ? DateFormat('HH:mm:ss') : DateFormat('h:mm:ss a');
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6),
+        side: const BorderSide(color: Color(0xFFD0D7DE)),
+      ),
+      child: Container(
+        width: 600,
+        height: 500,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F883D).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(Icons.history, size: 16, color: Color(0xFF1F883D)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    l10n.uploadHistoryTitle,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF24292F),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, size: 20),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              record.fileName,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF57606A),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 上传历史列表
+            Expanded(
+              child: record.uploadHistory.isEmpty
+                  ? Center(
+                      child: Text(
+                        l10n.noUploadHistory,
+                        style: const TextStyle(color: Color(0xFF57606A)),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: record.uploadHistory.length,
+                      itemBuilder: (context, index) {
+                        final history = record.uploadHistory[index];
+                        final isLast = index == record.uploadHistory.length - 1;
+                        return _buildHistoryItem(history, dateFormat, timeFormat, isLast);
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryItem(
+    UploadHistory history,
+    DateFormat dateFormat,
+    DateFormat timeFormat,
+    bool isLast,
+  ) {
+    Color statusColor;
+    Color statusBgColor;
+    IconData statusIcon;
+    String statusText;
+
+    switch (history.status) {
+      case UploadStatus.success:
+        statusColor = const Color(0xFF1F883D);
+        statusBgColor = const Color(0xFFDAFBE1);
+        statusIcon = Icons.check_circle_outline;
+        statusText = l10n.uploadSuccess;
+        break;
+      case UploadStatus.failed:
+        statusColor = const Color(0xFFCF222E);
+        statusBgColor = const Color(0xFFFFEBE9);
+        statusIcon = Icons.error_outline;
+        statusText = l10n.uploadFailed;
+        break;
+      case UploadStatus.uploading:
+        statusColor = const Color(0xFF9A6700);
+        statusBgColor = const Color(0xFFFFF8C5);
+        statusIcon = Icons.sync;
+        statusText = l10n.uploading;
+        break;
+      case UploadStatus.pending:
+        statusColor = const Color(0xFF57606A);
+        statusBgColor = const Color(0xFFF6F8FA);
+        statusIcon = Icons.schedule;
+        statusText = l10n.pending;
+        break;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFD0D7DE)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusBgColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 14, color: statusColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${dateFormat.format(history.uploadTime)} ${timeFormat.format(history.uploadTime)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF57606A),
+                ),
+              ),
+              if (isLast) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F883D).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    l10n.latest,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1F883D),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (history.headers.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${l10n.headersLabel}: ${history.headers.take(5).join(', ')}${history.headers.length > 5 ? '...' : ''}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF57606A),
+              ),
+            ),
+          ],
+          if (history.errorMessage != null && history.errorMessage!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${l10n.error}: ${history.errorMessage}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFFCF222E),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -844,13 +989,11 @@ class _DataDetailDialogState extends State<_DataDetailDialog> {
     if (result == true && mounted) {
       final newHeaders = controllers.map((c) => c.text.trim()).toList();
 
-      // 创建映射
       final headerMap = <String, String>{};
       for (var i = 0; i < _editableHeaders.length && i < newHeaders.length; i++) {
         headerMap[_editableHeaders[i]] = newHeaders[i];
       }
 
-      // 更新data中的key
       final newData = _editableRows.map((row) {
         final newRow = <String, dynamic>{};
         row.forEach((key, value) {
@@ -870,7 +1013,6 @@ class _DataDetailDialogState extends State<_DataDetailDialog> {
         };
       });
 
-      // 清理controllers
       for (var c in controllers) {
         c.dispose();
       }
@@ -971,7 +1113,6 @@ class _DataDetailDialogState extends State<_DataDetailDialog> {
         };
       });
 
-      // 清理controllers
       for (var c in controllers.values) {
         c.dispose();
       }
@@ -993,7 +1134,6 @@ class _DataDetailDialogState extends State<_DataDetailDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Row(
               children: [
                 Container(
@@ -1024,7 +1164,6 @@ class _DataDetailDialogState extends State<_DataDetailDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Sheet tabs
             if (_editableData.length > 1)
               Container(
                 height: 40,
@@ -1063,7 +1202,6 @@ class _DataDetailDialogState extends State<_DataDetailDialog> {
                 ),
               ),
 
-            // Data table
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -1109,7 +1247,6 @@ class _DataDetailDialogState extends State<_DataDetailDialog> {
               ),
             ),
 
-            // Actions
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
