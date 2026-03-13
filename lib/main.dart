@@ -200,6 +200,9 @@ class AppLocalizations {
       'serverResponse': 'Server Response',
       'reupload': 'Re-upload',
       'refresh': 'Refresh',
+      'refreshed': 'Refreshed',
+      'viewData': 'View Data',
+      'editRow': 'Edit Row',
     },
     'zh': {
       'appTitle': 'Excel导入工具',
@@ -271,6 +274,9 @@ class AppLocalizations {
       'serverResponse': '服务器响应',
       'reupload': '重新上传',
       'refresh': '刷新',
+      'refreshed': '已刷新',
+      'viewData': '查看数据',
+      'editRow': '编辑行',
     },
   };
 
@@ -342,6 +348,9 @@ class AppLocalizations {
   String get serverResponse => _localizedValues[locale.languageCode]?['serverResponse'] ?? 'Server Response';
   String get reupload => _localizedValues[locale.languageCode]?['reupload'] ?? 'Re-upload';
   String get refresh => _localizedValues[locale.languageCode]?['refresh'] ?? 'Refresh';
+  String get refreshed => _localizedValues[locale.languageCode]?['refreshed'] ?? 'Refreshed';
+  String get viewData => _localizedValues[locale.languageCode]?['viewData'] ?? 'View Data';
+  String get editRow => _localizedValues[locale.languageCode]?['editRow'] ?? 'Edit Row';
 
   // 带参数的方法
   String importedOn(String date, String time) {

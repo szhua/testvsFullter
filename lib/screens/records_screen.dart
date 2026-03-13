@@ -34,6 +34,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
+  Future<void> _refreshRecords() async {
+    final l10n = AppLocalizations.of(context)!;
+    await _loadRecords();
+    if (mounted) {
+      _showToast(l10n.refreshed, isError: false);
+    }
+  }
+
   Future<void> _exportRecords() async {
     final l10n = AppLocalizations.of(context)!;
     if (_records.isEmpty) {
@@ -107,17 +115,17 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
-  /// 重新编辑headers并上传
-  Future<void> _editAndReupload(ImportRecord record) async {
+  /// 显示数据详情弹窗
+  Future<void> _showDataDetail(ImportRecord record) async {
     final l10n = AppLocalizations.of(context)!;
 
-    // 解析当前数据
+    // 解析JSON数据
     Map<String, dynamic>? sheetsData;
     if (record.jsonPreview != null && record.jsonPreview!.isNotEmpty) {
       try {
         sheetsData = jsonDecode(record.jsonPreview!) as Map<String, dynamic>;
       } catch (e) {
-        _showToast(l10n.uploadFailed, isError: true);
+        _showToast(l10n.noValidDataFound, isError: true);
         return;
       }
     }
@@ -127,150 +135,46 @@ class _RecordsScreenState extends State<RecordsScreen> {
       return;
     }
 
-    // 获取第一个sheet的headers
-    final firstSheetKey = sheetsData.keys.first;
-    final firstSheet = sheetsData[firstSheetKey] as Map<String, dynamic>?;
-    List<String> headers = [];
-    if (firstSheet != null && firstSheet['headers'] is List) {
-      headers = List<String>.from(firstSheet['headers'] as List);
-    }
-
-    if (headers.isEmpty) {
-      _showToast(l10n.noValidDataFound, isError: true);
-      return;
-    }
-
-    // 显示编辑headers对话框
-    final controllers = headers.map((h) => TextEditingController(text: h)).toList();
-
-    final result = await showDialog<bool>(
+    await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-          side: const BorderSide(color: Color(0xFFD0D7DE)),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.edit_outlined, color: Color(0xFF1F883D)),
-            const SizedBox(width: 8),
-            Text(l10n.editHeaders),
-          ],
-        ),
-        content: SizedBox(
-          width: 400,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: controllers.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 30,
-                      child: Text(
-                        '${index + 1}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF57606A),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: controllers[index],
-                        decoration: InputDecoration(
-                          hintText: '${l10n.column} ${index + 1}',
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.save),
-          ),
-        ],
+      builder: (context) => _DataDetailDialog(
+        record: record,
+        sheetsData: sheetsData!,
+        l10n: l10n,
+        onEditAndUpload: (updatedData, newHeaders) async {
+          Navigator.pop(context);
+          setState(() {
+            _uploadingIds[record.id] = true;
+          });
+
+          try {
+            // 创建更新后的记录
+            final updatedRecord = record.copyWith(
+              jsonPreview: const JsonEncoder.withIndent('  ').convert(updatedData),
+              headers: newHeaders,
+            );
+
+            final result = await _excelService.reuploadRecord(updatedRecord, updatedData: updatedData);
+            await _loadRecords();
+
+            if (mounted) {
+              if (result.uploadStatus == UploadStatus.success) {
+                _showToast(l10n.uploadSuccess, isError: false);
+              } else {
+                _showToast('${l10n.uploadFailed}: ${result.uploadError}', isError: true);
+              }
+            }
+          } finally {
+            setState(() {
+              _uploadingIds.remove(record.id);
+            });
+          }
+        },
       ),
     );
-
-    if (result == true && mounted) {
-      // 更新headers
-      final newHeaders = controllers.map((c) => c.text.trim()).toList();
-
-      // 更新sheetsData中的headers
-      final oldHeaders = firstSheet?['headers'] as List;
-      final data = firstSheet?['data'] as List;
-
-      // 创建映射
-      final headerMap = <String, String>{};
-      for (var i = 0; i < oldHeaders.length && i < newHeaders.length; i++) {
-        headerMap[oldHeaders[i].toString()] = newHeaders[i];
-      }
-
-      // 更新data中的key
-      final newData = data.map((row) {
-        final newRow = <String, dynamic>{};
-        (row as Map<String, dynamic>).forEach((key, value) {
-          final newKey = headerMap[key] ?? key;
-          newRow[newKey] = value;
-        });
-        return newRow;
-      }).toList();
-
-      // 更新sheetsData
-      sheetsData[firstSheetKey] = {
-        'headers': newHeaders,
-        'data': newData,
-        'rowCount': firstSheet?['rowCount'],
-      };
-
-      // 清理controllers
-      for (var c in controllers) {
-        c.dispose();
-      }
-
-      // 标记为上传中
-      setState(() {
-        _uploadingIds[record.id] = true;
-      });
-
-      // 重新上传
-      try {
-        final updatedRecord = await _excelService.reuploadRecord(record, updatedData: sheetsData);
-        await _loadRecords();
-
-        if (mounted) {
-          if (updatedRecord.uploadStatus == UploadStatus.success) {
-            _showToast(l10n.uploadSuccess, isError: false);
-          } else {
-            _showToast('${l10n.uploadFailed}: ${updatedRecord.uploadError}', isError: true);
-          }
-        }
-      } finally {
-        setState(() {
-          _uploadingIds.remove(record.id);
-        });
-      }
-    }
   }
 
-  /// 直接重新上传（不修改headers）
+  /// 直接重新上传
   Future<void> _reupload(ImportRecord record) async {
     final l10n = AppLocalizations.of(context)!;
 
@@ -346,7 +250,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
         ),
         actions: [
           TextButton.icon(
-            onPressed: _loadRecords,
+            onPressed: _refreshRecords,
             icon: const Icon(Icons.refresh, size: 18),
             label: Text(l10n.refresh),
           ),
@@ -713,9 +617,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
                           )
                         else ...[
                           TextButton.icon(
-                            onPressed: () => _editAndReupload(record),
-                            icon: const Icon(Icons.edit_outlined, size: 16),
-                            label: Text(l10n.editHeaders),
+                            onPressed: () => _showDataDetail(record),
+                            icon: const Icon(Icons.visibility_outlined, size: 16),
+                            label: Text(l10n.viewData),
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton.icon(
@@ -815,6 +719,419 @@ class _RecordsScreenState extends State<RecordsScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 数据详情弹窗
+class _DataDetailDialog extends StatefulWidget {
+  final ImportRecord record;
+  final Map<String, dynamic> sheetsData;
+  final AppLocalizations l10n;
+  final Function(Map<String, dynamic> updatedData, List<String> newHeaders) onEditAndUpload;
+
+  const _DataDetailDialog({
+    required this.record,
+    required this.sheetsData,
+    required this.l10n,
+    required this.onEditAndUpload,
+  });
+
+  @override
+  State<_DataDetailDialog> createState() => _DataDetailDialogState();
+}
+
+class _DataDetailDialogState extends State<_DataDetailDialog> {
+  String? _selectedSheet;
+  late Map<String, dynamic> _editableData;
+  List<String> _editableHeaders = [];
+  List<Map<String, dynamic>> _editableRows = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _editableData = Map<String, dynamic>.from(widget.sheetsData);
+    _selectedSheet = _editableData.keys.firstOrNull;
+    _loadSheetData();
+  }
+
+  void _loadSheetData() {
+    if (_selectedSheet == null) return;
+
+    final sheetData = _editableData[_selectedSheet] as Map<String, dynamic>?;
+    if (sheetData != null) {
+      _editableHeaders = List<String>.from(sheetData['headers'] as List? ?? []);
+      _editableRows = List<Map<String, dynamic>>.from(
+        (sheetData['data'] as List?)?.map((e) => Map<String, dynamic>.from(e as Map)) ?? [],
+      );
+    }
+  }
+
+  Future<void> _showEditHeadersDialog() async {
+    if (_editableHeaders.isEmpty) return;
+
+    final controllers = _editableHeaders
+        .map((h) => TextEditingController(text: h))
+        .toList();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.edit_outlined, color: Color(0xFF1F883D)),
+            const SizedBox(width: 8),
+            Text(widget.l10n.editHeaders),
+          ],
+        ),
+        content: SizedBox(
+          width: 400,
+          height: 400,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: controllers.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 30,
+                      child: Text(
+                        '${index + 1}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF57606A),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: controllers[index],
+                        decoration: InputDecoration(
+                          hintText: '${widget.l10n.column} ${index + 1}',
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(widget.l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(widget.l10n.save),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      final newHeaders = controllers.map((c) => c.text.trim()).toList();
+
+      // 创建映射
+      final headerMap = <String, String>{};
+      for (var i = 0; i < _editableHeaders.length && i < newHeaders.length; i++) {
+        headerMap[_editableHeaders[i]] = newHeaders[i];
+      }
+
+      // 更新data中的key
+      final newData = _editableRows.map((row) {
+        final newRow = <String, dynamic>{};
+        row.forEach((key, value) {
+          final newKey = headerMap[key] ?? key;
+          newRow[newKey] = value;
+        });
+        return newRow;
+      }).toList();
+
+      setState(() {
+        _editableHeaders = newHeaders;
+        _editableRows = newData;
+        _editableData[_selectedSheet!] = {
+          'headers': newHeaders,
+          'data': newData,
+          'rowCount': newData.length,
+        };
+      });
+
+      // 清理controllers
+      for (var c in controllers) {
+        c.dispose();
+      }
+    }
+  }
+
+  Future<void> _showEditRowDialog(int rowIndex) async {
+    if (rowIndex < 0 || rowIndex >= _editableRows.length) return;
+
+    final rowData = _editableRows[rowIndex];
+    final controllers = <String, TextEditingController>{};
+
+    rowData.forEach((key, value) {
+      controllers[key] = TextEditingController(text: value?.toString() ?? '');
+    });
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: const BorderSide(color: Color(0xFFD0D7DE)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.edit_outlined, color: Color(0xFF1F883D)),
+            const SizedBox(width: 8),
+            Text('${widget.l10n.editRow} ${rowIndex + 1}'),
+          ],
+        ),
+        content: SizedBox(
+          width: 400,
+          height: 400,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: controllers.length,
+            itemBuilder: (context, index) {
+              final key = controllers.keys.elementAt(index);
+              final controller = controllers[key]!;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 100,
+                      child: Text(
+                        key,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF57606A),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        decoration: const InputDecoration(
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(widget.l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(widget.l10n.save),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      setState(() {
+        final newRow = <String, dynamic>{};
+        controllers.forEach((key, controller) {
+          newRow[key] = controller.text;
+        });
+        _editableRows[rowIndex] = newRow;
+        _editableData[_selectedSheet!] = {
+          'headers': _editableHeaders,
+          'data': _editableRows,
+          'rowCount': _editableRows.length,
+        };
+      });
+
+      // 清理controllers
+      for (var c in controllers.values) {
+        c.dispose();
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6),
+        side: const BorderSide(color: Color(0xFFD0D7DE)),
+      ),
+      child: Container(
+        width: 800,
+        height: 600,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1F883D).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(Icons.table_chart, size: 16, color: Color(0xFF1F883D)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    widget.record.fileName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF24292F),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, size: 20),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Sheet tabs
+            if (_editableData.length > 1)
+              Container(
+                height: 40,
+                margin: const EdgeInsets.only(bottom: 12),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _editableData.keys.map((sheet) {
+                      final isSelected = sheet == _selectedSheet;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedSheet = sheet;
+                            _loadSheetData();
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFF1F883D) : const Color(0xFFF6F8FA),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            sheet,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              color: isSelected ? Colors.white : const Color(0xFF57606A),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+
+            // Data table
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFD0D7DE)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      headingRowColor: WidgetStateProperty.all(const Color(0xFFF6F8FA)),
+                      columns: _editableHeaders.map((header) {
+                        return DataColumn(
+                          label: Text(
+                            header,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF24292F),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      rows: _editableRows.asMap().entries.map((entry) {
+                        final rowIndex = entry.key;
+                        final row = entry.value;
+                        return DataRow(
+                          cells: _editableHeaders.map((header) {
+                            final value = row[header]?.toString() ?? '';
+                            return DataCell(
+                              Text(
+                                value.length > 50 ? '${value.substring(0, 50)}...' : value,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              onTap: () => _showEditRowDialog(rowIndex),
+                            );
+                          }).toList(),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Actions
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: _showEditHeadersDialog,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: Text(widget.l10n.editHeaders),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    widget.onEditAndUpload(_editableData, _editableHeaders);
+                  },
+                  icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                  label: Text(widget.l10n.uploadToServer),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
